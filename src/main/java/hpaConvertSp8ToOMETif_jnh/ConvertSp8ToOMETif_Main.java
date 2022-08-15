@@ -58,6 +58,7 @@ import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
 import loci.formats.FormatException;
 import loci.formats.ImageReader;
+import loci.formats.in.MetadataOptions;
 import loci.formats.meta.IMetadata;
 import loci.formats.out.OMETiffWriter;
 import loci.formats.services.OMEXMLService;
@@ -348,7 +349,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 	}
 
-	void editTif(String file, String xmlToInsert) throws IOException, FormatException {
+	void replaceXMLInTif(String file, String xmlToInsert) throws IOException, FormatException {
 		// read comment
 		System.out.println("Reading " + file + " ");
 		String comment = new TiffParser(file).getComment();
@@ -429,7 +430,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 		int dot = id.lastIndexOf(".");
 		String outId = (dot >= 0 ? id.substring(0, dot) : id) + "";
-		progress.updateBarText("Converting " + id + " to " + outId + "...");
+		progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "...");
 
 		// record metadata to OME-XML format
 		ServiceFactory factory = new ServiceFactory();
@@ -441,13 +442,21 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 		// configure OME-TIFF writer
 		writer.setMetadataRetrieve(omexmlMeta);
+		MetadataOptions opt = writer.getMetadataOptions();
+		
 		// writer.setCompression("J2K");
 
 		// write out image planes
 		int seriesCount = reader.getSeriesCount();
+		int planeCounts [] = new int [seriesCount];
+		
+		LinkedList <String> savedFilePaths = new LinkedList <String>();
 		String tempTxt, ZTxt, CTxt;
+		String outFilePath;
+		
 		File fileDir;
 		for (int s = 0; s < seriesCount; s++) {
+			progress.setBar(s/seriesCount);
 			reader.setSeries(s);
 			writer.setSeries(s);
 			
@@ -494,8 +503,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				tempTxt += "" + s;
 			}
 			
-			int planeCount = reader.getImageCount();
-			for (int p = 0; p < planeCount; p++) {
+			planeCounts [s] = reader.getImageCount();
+			for (int p = 0; p < planeCounts [s]; p++) {
+				progress.setBar(s/seriesCount+p/planeCounts [s]/seriesCount);
 				byte[] plane = reader.openBytes(p);
 				int [] coords = reader.getZCTCoords(p);
 					
@@ -515,127 +525,67 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				}else {
 					CTxt += "_C" + coords[1];
 				}			
-								
-				writer.setId(outId + tempTxt + ZTxt + System.getProperty("file.separator") 
-					+ outId.substring(outId.lastIndexOf(System.getProperty("file.separator"))+1) + tempTxt + ZTxt + CTxt + ".ome.tif");
+				
+				//Saving file
+				outFilePath = outId + tempTxt + ZTxt + System.getProperty("file.separator") 
+					+ outId.substring(outId.lastIndexOf(System.getProperty("file.separator"))+1) + tempTxt + ZTxt + CTxt + ".ome.tif";				
+				savedFilePaths.add(outFilePath+"");				
+				writer.setId(outFilePath);
 				// write plane to output file
 				writer.saveBytes(p, plane);
-				System.out.print(".");
 			}
 		}
 		writer.close();
 		reader.close();
+		
+		for(int f = 0; f < savedFilePaths.size(); f++) {
+			progress.updateBarText("Cleaning XML " + savedFilePaths.get(f).substring(savedFilePaths.get(f).lastIndexOf(System.getProperty("file.separator"))+1) + "...");
+			cleanUpOmeTifXmlString(savedFilePaths.get(f));
+		}
+		
 		progress.notifyMessage("Converted " + id + " to " + outId + "...", ProgressDialog.LOG);
 	}
 	
-	void convertToOMETif(String id, String omeXML) throws Exception {
-		ImageReader reader = new ImageReader();
-		OMETiffWriter writer = new OMETiffWriter();
-
-		int dot = id.lastIndexOf(".");
-		String outId = (dot >= 0 ? id.substring(0, dot) : id) + "";
-		System.out.print("Converting " + id + " to " + outId + " ");
-
-		// record metadata to OME-XML format
-		ServiceFactory factory = new ServiceFactory();
-//		OMEXMLService service = factory.getInstance(OMEXMLService.class);
+	/**
+	 * Cleanup XML in OME TIF single image files
+	 * This code should remove all information related to series that are not in this image.
+	 * */
+	void cleanUpOmeTifXmlString(String file) throws IOException, FormatException {
+		// read comment
+		progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
+		progress.updateBarText("Reading " + file + " ");
 		
-//		IMetadata omexmlMeta = service.createOMEXMLMetadata();
-//		reader.setMetadataStore(omexmlMeta);
-//		reader.setId(id);
+		String comment = new TiffParser(file).getComment();
+		// or if you already have the file open for random access, you can use:
+		// RandomAccessInputStream fin = new RandomAccessInputStream(f);
+		// TiffParser tiffParser = new TiffParser(fin);
+		// String comment = tiffParser.getComment();
+		// fin.close();
+		progress.updateBarText("Reading " + file + " done!");
+		// display comment, and prompt for changes
+		progress.notifyMessage("Original comment:", ProgressDialog.LOG);
+		progress.notifyMessage(comment, ProgressDialog.LOG);
 		
-		IMetadata omexmlMeta = this.generateOMEXML(omeXML);
-
-		// configure OME-TIFF writer
-		writer.setMetadataRetrieve(omexmlMeta);
-		// writer.setCompression("J2K");
-
-		// write out image planes
-		int seriesCount = reader.getSeriesCount();
-		String tempTxt, ZTxt, CTxt;
-		File fileDir;
-		for (int s = 0; s < seriesCount; s++) {
-			reader.setSeries(s);
-			writer.setSeries(s);
+		//Cleaning up the XML
+		{
 			
-			tempTxt = "_S";
-			if(seriesCount > 100000) {
-				tempTxt += "" + s;
-			}else if(seriesCount > 10000) {
-				if(s < 10) {
-					tempTxt += "0000" + s;
-				}else if(s < 100) {
-					tempTxt += "000" + s;
-				}else if(s < 1000) {
-					tempTxt += "00" + s;
-				}else if(s < 10000) {
-					tempTxt += "0" + s;
-				}else {
-					tempTxt += "" + s;
-				}
-			}else if(seriesCount > 1000) {
-				if(s < 10) {
-					tempTxt += "000" + s;
-				}else if(s < 100) {
-					tempTxt += "00" + s;
-				}else if(s < 1000) {
-					tempTxt += "0" + s;
-				}else {
-					tempTxt += "" + s;
-				}
-			}else if(seriesCount > 100) {
-				if(s < 10) {
-					tempTxt += "00" + s;
-				}else if(s < 100) {
-					tempTxt += "0" + s;
-				}else {
-					tempTxt += "" + s;
-				}
-			}else if(seriesCount > 10) {
-				if(s < 10) {
-					tempTxt += "0" + s;
-				}else {
-					tempTxt += "" + s;
-				}
-			}else {
-				tempTxt += "" + s;
-			}
-			
-			int planeCount = reader.getImageCount();
-			for (int p = 0; p < planeCount; p++) {				
-				byte[] plane = reader.openBytes(p);
-				int [] coords = reader.getZCTCoords(p);
-					
-				ZTxt = "";
-				if(coords[0] < 10) {
-					ZTxt += "_Z0" + coords[0];
-				}else {
-					ZTxt += "_Z" + coords[0];
-				}			
-				fileDir = new File(outId + tempTxt);
-				if(!fileDir.exists()) fileDir.mkdir();
-				
-				CTxt = "";
-				if(coords[1] < 10) {
-					CTxt += "_C0" + coords[1];
-				}else {
-					CTxt += "_C" + coords[1];
-				}			
-				fileDir = new File(outId + tempTxt + ZTxt);
-				if(!fileDir.exists()) fileDir.mkdir();
-								
-				writer.setId(outId + tempTxt + ZTxt + System.getProperty("file.separator") 
-					+ outId.substring(outId.lastIndexOf(System.getProperty("file.separator"))+1) + tempTxt + ZTxt + CTxt + ".ome.tif");
-				// write plane to output file
-				writer.saveBytes(p, plane);
-				System.out.print(".");
-			}
 		}
-		writer.close();
-		reader.close();
-		System.out.println(" [done]");
+
+		progress.notifyMessage("New comment:", ProgressDialog.LOG);
+		progress.notifyMessage(comment, ProgressDialog.LOG);
+		
+		// save results back to the TIFF file
+		TiffSaver saver = new TiffSaver(file);
+		RandomAccessInputStream in = new RandomAccessInputStream(file);
+		saver.overwriteComment(in, comment);
+		in.close();
+
+		comment = new TiffParser(file).getComment();
+		
+		progress.notifyMessage("Saved comment:", ProgressDialog.LOG);
+		progress.notifyMessage(comment, ProgressDialog.LOG);
 	}
-	
+		
 	/**
 	 * This function is still a draft and requires more work
 	 * */
@@ -773,7 +723,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					imp.close();
 
 					try {
-						this.editTif(outfilepath, "<This is the added description>");
+						this.replaceXMLInTif(outfilepath, "<This is the added description>");
 					} catch (Exception e) {
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
