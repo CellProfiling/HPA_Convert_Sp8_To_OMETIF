@@ -307,8 +307,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				if(loadLif){
 					// Conversion via OME
 					try {
-//						this.convertToOMETif(dir[task] + "" + System.getProperty("file.separator") + name[task]);
-						this.convertToOMETif(dir[task] + "" + System.getProperty("file.separator") + name[task]);
+						convertToOMETif(dir[task] + "" + System.getProperty("file.separator") + name[task]);
+						
 					} catch (Exception e) {
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
@@ -319,11 +319,24 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								ProgressDialog.ERROR);
 						break running;
 					}
-
 				}else {
-					if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task)) {
+					/**
+					 * Convert folder structure into OME
+					 * */
+					try {
+						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task)) {
+							break running;
+						}						
+					} catch (Exception e) {
+						String out = "";
+						for (int err = 0; err < e.getStackTrace().length; err++) {
+							out += " \n " + e.getStackTrace()[err].toString();
+						}
+						progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process "
+								+ series[task] + " - Error " + e.getCause() + " - Detailed message:\n" + out,
+								ProgressDialog.ERROR);
 						break running;
-					}
+					}					
 				}
 
 				processingDone = true;
@@ -416,7 +429,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 		int dot = id.lastIndexOf(".");
 		String outId = (dot >= 0 ? id.substring(0, dot) : id) + "";
-		System.out.print("Converting " + id + " to " + outId + " ");
+		progress.updateBarText("Converting " + id + " to " + outId + "...");
 
 		// record metadata to OME-XML format
 		ServiceFactory factory = new ServiceFactory();
@@ -512,7 +525,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 		writer.close();
 		reader.close();
-		System.out.println(" [done]");
+		progress.notifyMessage("Converted " + id + " to " + outId + "...", ProgressDialog.LOG);
 	}
 	
 	void convertToOMETif(String id, String omeXML) throws Exception {
