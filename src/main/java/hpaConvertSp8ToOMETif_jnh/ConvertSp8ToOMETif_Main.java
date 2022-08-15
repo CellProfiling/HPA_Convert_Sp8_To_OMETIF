@@ -548,7 +548,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
 		}
+		progress.updateBarText("Converted - closing metadata writer...");
 		writer.close();
+		progress.updateBarText("Converted - closing metadata reader...");
 		reader.close();
 		
 		for(int f = 0; f < savedFilePaths.size(); f++) {
@@ -746,10 +748,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				{
 					nodeList = metaDoc.getElementsByTagName("Instrument");
 					for (int n = nodeList.getLength()-1; n >=0; n--) {
-						if(nodeList.item(n).getAttributes().getNamedItem("ID").equals(instrumentID)) continue;
+						if(nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue().equals(instrumentID)) {
+							if(extendedLogging) progress.notifyMessage("Keeping instrument node " + n 
+									+ " (ID = " + nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue() + ")",ProgressDialog.LOG);
+							continue;
+						}
 						
 						if(extendedLogging) progress.notifyMessage("Deleting instrument node " + n 
-								+ " (ID = " + nodeList.item(n).getAttributes().getNamedItem("ID") + ")",ProgressDialog.LOG);
+								+ " (ID = " + nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue() + ")",ProgressDialog.LOG);
 						
 						//not relevant image node > delete it
 						nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
@@ -776,13 +782,13 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					nodeList = metaDoc.getElementsByTagName("XMLAnnotation");
 					for (int n = nodeList.getLength()-1; n >=0; n--) {
 						childNodes = nodeList.item(n).getChildNodes();
-						for(int c1 = childNodes.getLength()-1; c1 >= 0; c1++) {
+						for(int c1 = childNodes.getLength()-1; c1 >= 0; c1--) {
 							if(!childNodes.item(c1).getNodeName().equals("Value")) {
 								if(extendedLogging) progress.notifyMessage("Node of type " + childNodes.item(c1).getNodeName() + " in XML Annotation " + n,ProgressDialog.NOTIFICATION);
 								continue;
 							}
 							grandChildNodes = childNodes.item(c1).getChildNodes();
-							for(int c2 = grandChildNodes.getLength()-1; c2 >= 0; c2++) {
+							for(int c2 = grandChildNodes.getLength()-1; c2 >= 0; c2--) {
 								if(!grandChildNodes.item(c2).getNodeName().equals("OriginalMetadata")) {
 									if(extendedLogging) progress.notifyMessage("Node of type " + grandChildNodes.item(c2).getNodeName() + " in XML Annotation " + n + " Value " + c1,ProgressDialog.NOTIFICATION);
 									continue;
@@ -797,14 +803,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								//Verify that key starts with ImageName		
 								if(grandChildNodes.item(c2).getChildNodes().item(0).getTextContent().startsWith(imageName)) {
 									//keep the XML Annotation
-									if(extendedLogging) progress.notifyMessage("         KEEP node " + n 
-											+ " (ID " + nodeList.item(n).getAttributes().getNamedItem("ID") 
-											+ " Content " + grandChildNodes.item(c2).getChildNodes().item(0).getTextContent() + ")",ProgressDialog.LOG);									
+//									if(extendedLogging) progress.notifyMessage("         KEEP node " + n 
+//											+ " (ID " + nodeList.item(n).getAttributes().getNamedItem("ID") 
+//											+ " Content " + grandChildNodes.item(c2).getChildNodes().item(0).getTextContent() + ")",ProgressDialog.LOG);									
 								}else {
 									//delete the XML Annotation node since it belongs to a different image
-									if(extendedLogging) progress.notifyMessage("Deleting image node " + n 
-											+ " (ID " + nodeList.item(n).getAttributes().getNamedItem("ID") 
-											+ " Content " + grandChildNodes.item(c2).getChildNodes().item(0).getTextContent() + ")",ProgressDialog.LOG);
+//									if(extendedLogging) progress.notifyMessage("Deleting image node " + n 
+//											+ " (ID " + nodeList.item(n).getAttributes().getNamedItem("ID") 
+//											+ " Content " + grandChildNodes.item(c2).getChildNodes().item(0).getTextContent() + ")",ProgressDialog.LOG);
 									nodeList.item(n).getParentNode().removeChild(nodeList.item(n));	
 								}
 							}
@@ -817,10 +823,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					nodeList = metaDoc.getElementsByTagName("XMLAnnotation");
 					org.w3c.dom.Element attrib;
 					for (int n = 0; n < nodeList.getLength(); n++) {
-					    if(extendedLogging) progress.notifyMessage("Adjust " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
+//					    if(extendedLogging) progress.notifyMessage("Adjust " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
 						attrib = (org.w3c.dom.Element) nodeList.item(n);
 					    attrib.setAttribute("ID", "Annotation:" + n);
-					    if(extendedLogging) progress.notifyMessage("   Adjusted " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
+//					    if(extendedLogging) progress.notifyMessage("   Adjusted " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
 					}
 				}
 				
@@ -845,8 +851,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				if(extendedLogging)	IJ.log("B: " + metaDataXMLString);
 				
 			}
+			// hand back the edited comment
+			comment = metaDataXMLString;
 		}
-
 
 		if(logWholeComments) {
 			progress.notifyMessage("New comment:", ProgressDialog.LOG);
