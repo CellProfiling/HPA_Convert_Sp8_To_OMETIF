@@ -461,8 +461,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		File fileDir;
 		for (int s = 0; s < seriesCount; s++) {
-			progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + s + "/" + seriesCount+" done)");
-			progress.setBar(s/(double)seriesCount);
+			progress.setBar(s/seriesCount*0.4);
 			reader.setSeries(s);
 			writer.setSeries(s);
 			
@@ -511,7 +510,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			
 			planeCounts [s] = reader.getImageCount();
 			for (int p = 0; p < planeCounts [s]; p++) {
-				progress.setBar(s/(double)seriesCount+p/(double)planeCounts [s]/(double)seriesCount);
+				progress.setBar((s/(double)seriesCount+p/(double)planeCounts [s]/(double)seriesCount)*0.4);
 				byte[] plane = reader.openBytes(p);
 				int [] coords = reader.getZCTCoords(p);
 					
@@ -540,11 +539,13 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				// write plane to output file
 				writer.saveBytes(p, plane);
 			}
+			progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
 		}
 		writer.close();
 		reader.close();
 		
 		for(int f = 0; f < savedFilePaths.size(); f++) {
+			progress.setBar(0.4+(0.4*f/(double)savedFilePaths.size()));
 			progress.updateBarText("Cleaning XML " + savedFilePaths.get(f).substring(savedFilePaths.get(f).lastIndexOf(System.getProperty("file.separator"))+1) + "...");
 			cleanUpOmeTifXmlString(savedFilePaths.get(f), false, true);
 		}
@@ -582,18 +583,16 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * Import the XML - generate document to read from it
 			 */
 			Document metaDoc = null;
-			String metaDataXMLString = "";
-			{
-				metaDataXMLString = comment+"";
-				
+			String metaDataXMLString = comment+"";
+//			InputStream xmlIs = org.apache.commons.io.IOUtils.toInputStream(metaDataXMLString);	
+			InputStream xmlIs = new java.io.ByteArrayInputStream(metaDataXMLString.getBytes(StandardCharsets.UTF_8));
+			//Note usually it is UTF-8 but it is also specified in the OME-String.
+			
+			{			
 				try {
 					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 					DocumentBuilder db = dbf.newDocumentBuilder();
-					
-//					InputStream xmlIs = org.apache.commons.io.IOUtils.toInputStream(metaDataXMLString);	
-					InputStream xmlIs = new java.io.ByteArrayInputStream(metaDataXMLString.getBytes(StandardCharsets.UTF_8));
-					//Note usually it is UTF-8 but it is also specified in the OME-String.
-										
+															
 					metaDoc = db.parse(xmlIs);
 					metaDoc.getDocumentElement().normalize();
 				} catch (SAXException | IOException | ParserConfigurationException e) {
@@ -718,7 +717,21 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				 * Now we start the cleaning. We know which image and instrument object to keep and can clear everything else.
 				 * */
 				
-				
+				//First, scan through images and remove obsolete image nodes
+				{
+					nodeList = metaDoc.getElementsByTagName("Image");
+					for (int n = nodeList.getLength()-1; n >=0; n--) {						
+						if(n == imageIndexInAllImageNodes) continue;
+						if(extendedLogging) progress.notifyMessage("Deleting image node " + n 
+								+ " (" + nodeList.item(n).getAttributes().item(0) 
+								+ " " + nodeList.item(n).getAttributes().item(1) + ")",ProgressDialog.LOG);
+						
+						//not relevant image node > delete it
+						nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
+					}
+					if(extendedLogging)	IJ.log("A: " + metaDataXMLString);
+					if(extendedLogging)	IJ.log("B: " + new String(xmlIs.readAllBytes(), StandardCharsets.UTF_8));
+				}
 			}
 		}
 
