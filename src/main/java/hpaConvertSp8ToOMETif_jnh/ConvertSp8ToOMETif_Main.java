@@ -24,11 +24,14 @@ import java.awt.Font;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.SimpleDateFormat;
@@ -43,8 +46,10 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
+import org.apache.commons.io.IOUtils;
 //W3C definitions for a DOM, DOM exceptions, entities, nodes
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
@@ -151,10 +156,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				name[task] = od.filesToOpen.get(task).getName();
 				dir[task] = od.filesToOpen.get(task).getParent();
 
-				IJ.log("ORIGINAL: " + fullPath[task]);
-				IJ.log("series:" + series[task]);
-				IJ.log("name:" + name[task]);
-				IJ.log("dir:" + dir[task]);
+//				IJ.log("ORIGINAL: " + fullPath[task]);
+//				IJ.log("series:" + series[task]);
+//				IJ.log("name:" + name[task]);
+//				IJ.log("dir:" + dir[task]);
 			}
 		} else {
 			// Loading a folder structure
@@ -456,7 +461,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		File fileDir;
 		for (int s = 0; s < seriesCount; s++) {
-			progress.setBar(s/seriesCount);
+			progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + s + "/" + seriesCount+" done)");
+			progress.setBar(s/(double)seriesCount);
 			reader.setSeries(s);
 			writer.setSeries(s);
 			
@@ -505,7 +511,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			
 			planeCounts [s] = reader.getImageCount();
 			for (int p = 0; p < planeCounts [s]; p++) {
-				progress.setBar(s/seriesCount+p/planeCounts [s]/seriesCount);
+				progress.setBar(s/(double)seriesCount+p/(double)planeCounts [s]/(double)seriesCount);
 				byte[] plane = reader.openBytes(p);
 				int [] coords = reader.getZCTCoords(p);
 					
@@ -540,7 +546,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		for(int f = 0; f < savedFilePaths.size(); f++) {
 			progress.updateBarText("Cleaning XML " + savedFilePaths.get(f).substring(savedFilePaths.get(f).lastIndexOf(System.getProperty("file.separator"))+1) + "...");
-			cleanUpOmeTifXmlString(savedFilePaths.get(f));
+			cleanUpOmeTifXmlString(savedFilePaths.get(f), false, true);
 		}
 		
 		progress.notifyMessage("Converted " + id + " to " + outId + "...", ProgressDialog.LOG);
@@ -550,7 +556,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	 * Cleanup XML in OME TIF single image files
 	 * This code should remove all information related to series that are not in this image.
 	 * */
-	void cleanUpOmeTifXmlString(String file) throws IOException, FormatException {
+	void cleanUpOmeTifXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
 		progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
 		progress.updateBarText("Reading " + file + " ");
@@ -563,16 +569,164 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		// fin.close();
 		progress.updateBarText("Reading " + file + " done!");
 		// display comment, and prompt for changes
-		progress.notifyMessage("Original comment:", ProgressDialog.LOG);
-		progress.notifyMessage(comment, ProgressDialog.LOG);
+		if(logWholeComments) {
+			progress.notifyMessage("Original comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+			
+		}
 		
 		//Cleaning up the XML
 		{
-			
+
+			/**
+			 * Import the XML - generate document to read from it
+			 */
+			Document metaDoc = null;
+			String metaDataXMLString = "";
+			{
+				metaDataXMLString = comment+"";
+				
+				try {
+					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+					DocumentBuilder db = dbf.newDocumentBuilder();
+					
+//					InputStream xmlIs = org.apache.commons.io.IOUtils.toInputStream(metaDataXMLString);	
+					InputStream xmlIs = new java.io.ByteArrayInputStream(metaDataXMLString.getBytes(StandardCharsets.UTF_8));
+					//Note usually it is UTF-8 but it is also specified in the OME-String.
+										
+					metaDoc = db.parse(xmlIs);
+					metaDoc.getDocumentElement().normalize();
+				} catch (SAXException | IOException | ParserConfigurationException e) {
+					String out = "";
+					for (int err = 0; err < e.getStackTrace().length; err++) {
+						out += " \n " + e.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Could not process "
+							+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
+							ProgressDialog.ERROR);
+					return;
+				}
+
+				
+				/*
+				 * Editing starts - Let's first find out the uuid of the saved image and the image that it belongs to in the metadata so we know what to keep!
+				 * In the XML the uuid of the respective image is stored in the parent node (<OME ...>) as an argument called UUID = "". We need to retrieve that first.
+				 * Then, in the XML file each image is saved as an <Image> node, and under each Image 
+				 * node there is an item called <Pixels>, under which each image plane is stored as a <TiffData> 
+				 * node containing a <UUID> node, whose content is the UUID containing also the argument FileName.
+				 * E.g., thge TiffData node can look like this:
+				 * 	<TiffData FirstC="1" FirstT="0" FirstZ="0" IFD="0" PlaneCount="1">
+               	 *		<UUID FileName="20220513_JNH008_E5_PFATrit0p1_GT335_1k_S0_Z00_C01.ome.tif">urn:uuid:615a14da-fcf8-4184-be60-df092f26fa1c</UUID>
+            	 *	</TiffData>
+            	 *	We need to scan through all image nodes and there screen these TiffData nodes to find out the corresponding image in which the UUID is contained. 
+            	 *	Then we want to store the image ID and image Name in which the uuid is stored. Both of these parameters are attributes of an <Image> (Image objects look e.g. like: <Image ID="Image:0" Name="Series001"> ...)
+            	 * 	Then from that image we can find out which Instrument ID belongs to it, since under the image node there is an <InstrumentRef> node. We only need to keep instrument settings for this InstrumentID
+				 * */
+				
+				//Supportive variables
+				NodeList nodeList, childNodes, grandChildNodes;
+				
+				
+				//Retrieve UUID
+				String uuid = "none";
+				{
+					uuid = metaDoc.getElementsByTagName("OME").item(0).getAttributes().getNamedItem("UUID").getNodeValue();
+					if(extendedLogging) progress.notifyMessage("Detected uuid:	" + uuid, ProgressDialog.ERROR);
+				}				
+				if(uuid.equals("none")) {
+					progress.notifyMessage("Failed to read uuid",ProgressDialog.ERROR);
+					return;					
+				}
+				
+				//Retrieve ImageID
+				String imageID;
+				String imageName;
+				int imageIndexInAllImageNodes = -1;
+				{
+					nodeList = metaDoc.getElementsByTagName("Image");
+					findingUuidInImages: for (int n = 0; n < nodeList.getLength(); n++) {
+						childNodes = nodeList.item(n).getChildNodes();
+						int pixelC = -1;
+						for (int c = 0; c < childNodes.getLength(); c++) {
+							if(childNodes.item(c).getNodeName().equals("Pixels")) {
+								pixelC = c;
+								if(extendedLogging) progress.notifyMessage("Accepted childNode " + c + " - Name: " + childNodes.item(c).getNodeName(),ProgressDialog.LOG);
+								break;
+							}else {
+								if(extendedLogging) progress.notifyMessage("Discarded childNode " + c + " - Name: " + childNodes.item(c).getNodeName(),ProgressDialog.LOG);
+							}
+						}
+						if(extendedLogging) progress.notifyMessage("Decided item nr " + pixelC + "",ProgressDialog.LOG);
+						
+						//Now go into the subnodes of Pixel, search for <TiffData> nodes and retrieve the UUID element in there. 
+						//When the UUID matches to the uuid we look for, verify that the filename matches the attribute FileName. If it does, save that ImageID.
+						childNodes = childNodes.item(pixelC).getChildNodes();
+						 for (int c = 0; c < childNodes.getLength(); c++) {							
+							if(childNodes.item(c).getNodeName().equals("TiffData")) {
+								if(extendedLogging) progress.notifyMessage("FoundTiffChildNode at " + c + "",ProgressDialog.LOG);
+								grandChildNodes = childNodes.item(c).getChildNodes();
+								for (int cc = 0; cc < grandChildNodes.getLength(); cc++) {
+									if(grandChildNodes.item(cc).getTextContent().equals(uuid)) {										
+										if(extendedLogging) progress.notifyMessage("Found uuidNode " + cc + " - UUID: " + grandChildNodes.item(cc).getTextContent(),ProgressDialog.LOG);
+										if(extendedLogging) progress.notifyMessage("Noted FileName for UUID: " + grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue(),ProgressDialog.LOG);	
+										
+										if(extendedLogging) progress.notifyMessage("Does it match to " + file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1) + "?",ProgressDialog.LOG);	
+										if(grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue().equals(file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1))) {
+											if(extendedLogging) progress.notifyMessage("YES!",ProgressDialog.LOG);
+											imageID = nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue();
+											imageName = nodeList.item(n).getAttributes().getNamedItem("Name").getNodeValue();
+											imageIndexInAllImageNodes = n;
+											if(extendedLogging) progress.notifyMessage("ImageID: " + imageID,ProgressDialog.LOG);	
+											if(extendedLogging) progress.notifyMessage("ImageName: " + imageName,ProgressDialog.LOG);	
+											if(extendedLogging) progress.notifyMessage("ImageIndex: " + imageIndexInAllImageNodes,ProgressDialog.LOG);	
+											break findingUuidInImages;
+										}
+									}
+										
+								}
+							}else {
+								if(extendedLogging) progress.notifyMessage("Refused childnode " + c + ", which is " + childNodes.item(c).getNodeName(),ProgressDialog.LOG);								
+							}
+						}
+						
+						
+					}
+				}
+				nodeList = null;
+				childNodes = null;
+				grandChildNodes = null;
+				
+				//Retrieve Instrument ID
+				String instrumentID = "missing";				
+				nodeList = metaDoc.getElementsByTagName("Image").item(imageIndexInAllImageNodes).getChildNodes();
+				for (int n = 0; n < nodeList.getLength(); n++) {
+					if(nodeList.item(n).getNodeName().equals("InstrumentRef")) {
+						instrumentID = nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue();
+						if(extendedLogging) progress.notifyMessage("Instrument ID: " + instrumentID,ProgressDialog.LOG);	
+						break;
+					}
+					if(n == nodeList.getLength()-1) {
+						progress.notifyMessage("Could not find instrumentID",ProgressDialog.ERROR);	
+						return;
+					}
+				}
+				nodeList = null;
+				
+				if(extendedLogging) progress.notifyMessage("Retrieved all parameters :)",ProgressDialog.LOG);			
+				
+				/*
+				 * Now we start the cleaning. We know which image and instrument object to keep and can clear everything else.
+				 * */
+				
+				
+			}
 		}
 
-		progress.notifyMessage("New comment:", ProgressDialog.LOG);
-		progress.notifyMessage(comment, ProgressDialog.LOG);
+
+		if(logWholeComments) {
+			progress.notifyMessage("New comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);			
+		}
 		
 		// save results back to the TIFF file
 		TiffSaver saver = new TiffSaver(file);
@@ -581,9 +735,11 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		in.close();
 
 		comment = new TiffParser(file).getComment();
-		
-		progress.notifyMessage("Saved comment:", ProgressDialog.LOG);
-		progress.notifyMessage(comment, ProgressDialog.LOG);
+
+		if(logWholeComments) {
+			progress.notifyMessage("Saved comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+		}
 	}
 		
 	/**
