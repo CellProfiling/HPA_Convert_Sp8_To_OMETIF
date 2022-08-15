@@ -31,6 +31,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -45,6 +46,11 @@ import javax.swing.UIManager;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 import org.apache.commons.io.IOUtils;
 //W3C definitions for a DOM, DOM exceptions, entities, nodes
@@ -662,7 +668,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						childNodes = childNodes.item(pixelC).getChildNodes();
 						 for (int c = 0; c < childNodes.getLength(); c++) {							
 							if(childNodes.item(c).getNodeName().equals("TiffData")) {
-								if(extendedLogging) progress.notifyMessage("FoundTiffChildNode at " + c + "",ProgressDialog.LOG);
+								if(extendedLogging) progress.notifyMessage("Found TiffChildNode at " + c + "",ProgressDialog.LOG);
 								grandChildNodes = childNodes.item(c).getChildNodes();
 								for (int cc = 0; cc < grandChildNodes.getLength(); cc++) {
 									if(grandChildNodes.item(cc).getTextContent().equals(uuid)) {										
@@ -729,9 +735,28 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						//not relevant image node > delete it
 						nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
 					}
-					if(extendedLogging)	IJ.log("A: " + metaDataXMLString);
-					if(extendedLogging)	IJ.log("B: " + new String(xmlIs.readAllBytes(), StandardCharsets.UTF_8));
 				}
+				
+				//Write document back to string
+				if(extendedLogging)	IJ.log("A: " + metaDataXMLString);
+				try {
+				    Transformer tf = TransformerFactory.newInstance().newTransformer();
+				    StreamResult strRes = new StreamResult(new StringWriter());
+				    DOMSource metaDocSource = new DOMSource(metaDoc);				    
+				    tf.transform(metaDocSource, strRes);
+				    metaDataXMLString = strRes.getWriter().toString();
+				} catch(TransformerException tfe) {
+				    tfe.printStackTrace();
+				    String out = "";
+					for (int err = 0; err < tfe.getStackTrace().length; err++) {
+						out += " \n " + tfe.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Could not convert document to String"
+							+ " - Error " + tfe.getCause() + " - Detailed message:\n" + out,
+							ProgressDialog.ERROR);
+				}
+				if(extendedLogging)	IJ.log("B: " + metaDataXMLString);
+				
 			}
 		}
 
