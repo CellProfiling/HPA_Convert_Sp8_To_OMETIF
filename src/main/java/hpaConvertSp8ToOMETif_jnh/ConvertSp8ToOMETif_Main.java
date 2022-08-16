@@ -471,7 +471,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			progress.setBar(s/seriesCount*0.4);
 			reader.setSeries(s);
 			writer.setSeries(s);
-			
+						
 			tempTxt = "_S";
 			if(seriesCount > 100000) {
 				tempTxt += "" + s;
@@ -520,7 +520,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				progress.setBar((s/(double)seriesCount+p/(double)planeCounts [s]/(double)seriesCount)*0.4);
 				byte[] plane = reader.openBytes(p);
 				int [] coords = reader.getZCTCoords(p);
-					
+								
 				ZTxt = "";
 				if(coords[0] < 10) {
 					ZTxt += "_Z0" + coords[0];
@@ -734,7 +734,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				{
 					nodeList = metaDoc.getElementsByTagName("Image");
 					for (int n = nodeList.getLength()-1; n >=0; n--) {						
-						if(n == imageIndexInAllImageNodes) continue;
+						if(n == imageIndexInAllImageNodes) {							
+							continue;
+						}
 						if(extendedLogging) progress.notifyMessage("Deleting image node " + n 
 								+ " (" + nodeList.item(n).getAttributes().item(0) 
 								+ " " + nodeList.item(n).getAttributes().item(1) + ")",ProgressDialog.LOG);
@@ -828,6 +830,33 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					    attrib.setAttribute("ID", "Annotation:" + n);
 //					    if(extendedLogging) progress.notifyMessage("   Adjusted " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
 					}
+					
+					
+					/**
+					 * LIMS always reads only the Image:0 notes > change Image name to Image:0
+					 * Change instrument also to Instrument:0 ?
+					 * */
+					{
+						nodeList = metaDoc.getElementsByTagName("Image");
+						for (int n = nodeList.getLength()-1; n >=0; n--) {						
+							if(nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue().equals(imageID)) {
+								if(extendedLogging) progress.notifyMessage("Changing image ID from " + nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue()
+										+ " to Image:0",ProgressDialog.LOG);
+								nodeList.item(n).getAttributes().getNamedItem("ID").setNodeValue("Image:0");
+							}
+							
+							
+							//not relevant image node > delete it
+							nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
+						}
+					}
+					
+					
+					/**
+					 * TODO
+					 * Should we change the IFDs to completely remove the Z stack? Instead use a z position?
+					 * Fix Channel information based on OriginalMetadata?
+					 * */
 				}
 				
 				//Write document back to string
