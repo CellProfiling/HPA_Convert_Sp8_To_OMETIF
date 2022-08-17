@@ -132,7 +132,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		String dir[] = { "", "" };
 		String fullPath[] = { "", "" };
 
-		boolean loadLif = true;	//TODO make optional
+		boolean loadLif = false;	//TODO make optional
 		if (loadLif) {
 			OpenFilesDialog od = new OpenFilesDialog(false);
 			od.setLocation(0, 0);
@@ -209,6 +209,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				for (int f = 0; f < fileList.length; f++) {
 					if (fileList[f].equals("MetaData")) {
 						withMetaData = true;
+					}else if (fileList[f].equals("Metadata")) {
+						withMetaData = true;
 					}
 				}
 				if (withMetaData == false) {
@@ -232,11 +234,15 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					if (fileList[f].endsWith(".tif") || fileList[f].endsWith(".TIF") || fileList[f].endsWith(".tiff")
 							|| fileList[f].endsWith(".TIFF")) {
 						tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf(".tif"));
-						if (tempFile.contains("_z")) {
+						if (tempFile.contains("_z")) {	//raw tif output: _z, xlef data: --Z
 							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("_z"));
-						} else if (tempFile.contains("_ch")) {
+						} else if (tempFile.contains("--Z")) {
+							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("--z"));
+						} else if (tempFile.contains("_ch")) {	//raw tif output: _ch, xlef data: --C
 							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("_ch"));
-						} else {
+						} else if (tempFile.contains("--C")) {
+							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("--c"));
+						}else {
 							IJ.log("Wrong tif formats in folder! Some files were skipped");
 						}
 
@@ -337,7 +343,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					 * Convert folder structure into OME
 					 * */
 					try {
-						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task)) {
+						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task, true)) {
 							break running;
 						}						
 					} catch (Exception e) {
@@ -361,31 +367,31 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 	}
 
-	void replaceXMLInTif(String file, String xmlToInsert) throws IOException, FormatException {
+	void replaceXMLInTif(String file, String xmlToInsert, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
-		System.out.println("Reading " + file + " ");
-		String comment = new TiffParser(file).getComment();
+		if(extendedLogging) progress.notifyMessage("Start replacmenet for " + file,ProgressDialog.LOG);
+		if(extendedLogging) progress.notifyMessage("	Reading...",ProgressDialog.LOG);
+
+		String omeTifComment = new TiffParser(file).getComment();
 		// or if you already have the file open for random access, you can use:
 		// RandomAccessInputStream fin = new RandomAccessInputStream(f);
 		// TiffParser tiffParser = new TiffParser(fin);
 		// String comment = tiffParser.getComment();
 		// fin.close();
-		IJ.log("[done]");
+
 		// display comment, and prompt for changes
-		IJ.log("Comment =");
-		IJ.log(comment);
-		IJ.log("Enter new comment (no line breaks):");
-//		System.out.print("Saving " + file);
+		if(extendedLogging) progress.notifyMessage("	Read content: " + omeTifComment,ProgressDialog.LOG);
+		
 		// save results back to the TIFF file
+		if(extendedLogging) progress.notifyMessage("	Replace with: " + xmlToInsert,ProgressDialog.LOG);
 		TiffSaver saver = new TiffSaver(file);
 		RandomAccessInputStream in = new RandomAccessInputStream(file);
 		saver.overwriteComment(in, xmlToInsert);
 		in.close();
-		IJ.log(" [done]");
-
-		comment = new TiffParser(file).getComment();
-		IJ.log("New comment =");
-		IJ.log(comment);
+		
+		omeTifComment = new TiffParser(file).getComment();
+		if(extendedLogging) progress.notifyMessage("	Verifying new content: " + omeTifComment,ProgressDialog.LOG);
+		
 	}
 
 	IMetadata generateOMEXML(String xmlToInsert) throws DependencyException, ServiceException {
@@ -414,13 +420,13 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	String readFileAsOneString(File path) throws FileNotFoundException {
 		FileReader fr = new FileReader(path);
 		BufferedReader br = new BufferedReader(fr);
-		String line = "", collectedXML = "";
+		String line = "", collectedString = "";
 		copyPaste: while (true) {
 			try {
 				line = br.readLine();
 				if (line.equals(null))
 					break copyPaste;
-				collectedXML += line;
+				collectedString += line;
 
 			} catch (Exception e) {
 				break copyPaste;
@@ -433,7 +439,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 			e.printStackTrace();
 		}
-		return collectedXML;
+		return collectedString;
 	}
 
 	void convertToOMETif(String id) throws Exception {
@@ -647,7 +653,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				}
 				
 				//Retrieve ImageID
-				String imageID;
+				String imageID = null;
 				String imageName = "NoImageNameDetected";
 				int imageIndexInAllImageNodes = -1;
 				{
@@ -906,33 +912,64 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	/**
 	 * This function is still a draft and requires more work
 	 * */
-	boolean importingFromFolderStructureXLEF(String directory, String filename, String series, int task) {
+	boolean importingFromFolderStructureXLEF(String directory, String filename, String series, int task, boolean extendedLogging) {
 		/**
-		 * Check for problems
+		 * Finding the metadata
 		 */
 		File metaDataFile = new File("");
+		String metadataFolderName = "Not Known";
+		String metadataFileEnding = "Not Known";
 		{
-			// Verify that a folder named "MetaData" exists for the respective series
-			if (!new File(directory + System.getProperty("file.separator") + filename
-					+ System.getProperty("file.separator") + "MetaData").isDirectory()) {
+			// Verify that a folder named "MetaData" exists and contains a file called as the series and having the ending ".xml" (raw data export) or ".xlif" (xlef data)
+			searchMetadata: while(true) {
+				metadataFolderName = "Metadata";
+				
+				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
+						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+						+ series + ".xml");
+				
+				if (metaDataFile.exists()) {
+					metadataFileEnding = ".xml";
+					break searchMetadata;
+				}
+				
+				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
+						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+						+ series + ".xlif");
+					
+				if (metaDataFile.exists()) {
+					metadataFileEnding = ".xlif";
+					break searchMetadata;
+				}
+				
+				metadataFolderName = "MetaData";
+				
+				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
+						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+						+ series + ".xml");
+				
+				if (metaDataFile.exists()) {
+					metadataFileEnding = ".xml";
+					break searchMetadata;
+				}
+				
+				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
+						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+						+ series + ".xlif");
+					
+				if (metaDataFile.exists()) {
+					metadataFileEnding = ".xlif";
+					break searchMetadata;
+				}
+						
+				metaDataFile = null;				
 				progress.notifyMessage("Task " + (task + 1) + "/" + tasks
-						+ ": Could not be processed - MetaData folder missing for " + series + "!",
+						+ ": Could not be processed - metadata folder or .xml or .xlef file missing for " + series + "!",
 						ProgressDialog.ERROR);
 				return false;
 			}
-
-			// Verify that the "MetaData" folder contains a file called as the series and
-			// having the ending ".xml"
-			metaDataFile = new File(directory + System.getProperty("file.separator") + filename
-					+ System.getProperty("file.separator") + "MetaData" + System.getProperty("file.separator")
-					+ series + ".xml");
-			
-			if (!metaDataFile.exists()) {
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks
-						+ ": Could not be processed - MetaData .xml file missing for " + series + "!",
-						ProgressDialog.ERROR);
-				return false;
-			}
+			if(extendedLogging) progress.notifyMessage("Metadata folder is called <" + metadataFolderName + ">",ProgressDialog.LOG);
+			if(extendedLogging) progress.notifyMessage("Metadata file ending is " + metadataFileEnding + "",ProgressDialog.LOG);
 		}		
 		
 		
@@ -945,7 +982,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			try {
 				metaDataXMLString = this.readFileAsOneString(metaDataFile);
 			} catch (FileNotFoundException e1) {
-				e1.printStackTrace();
+				String out = "";
+				for (int err = 0; err < e1.getStackTrace().length; err++) {
+					out += " \n " + e1.getStackTrace()[err].toString();
+				}
+				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed reading metadata file for "
+						+ series + " - Error " + e1.getCause() + " - Detailed message:\n" + out,
+						ProgressDialog.ERROR);
+				return false;
 			}
 
 			try {
@@ -964,23 +1008,23 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				return false;
 			}
 
-			NodeList nodeList = metaDoc.getElementsByTagName("ATLConfocalSettingDefinition");
-			for (int n = 0; n < nodeList.getLength(); n++) {
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Type: "
-						+ nodeList.item(n).getNodeType(), ProgressDialog.LOG);
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Name: "
-						+ nodeList.item(n).getNodeName(), ProgressDialog.LOG);
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Value: "
-						+ nodeList.item(n).getNodeValue(), ProgressDialog.LOG);
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Content: "
-						+ nodeList.item(n).getTextContent(), ProgressDialog.LOG);
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " NodeMap:",
-						ProgressDialog.LOG);
-				for (int i = 0; i < nodeList.item(n).getAttributes().getLength(); i++) {
-					progress.notifyMessage("" + nodeList.item(n).getAttributes().item(i), ProgressDialog.LOG);
-				}
-//				progress.notifyMessage("Task " + (task+1) + "/" + tasks + ": Node " + (n+1) + " Content: " + nodeList.item(n).getFeature("Name", ""), ProgressDialog.LOG);
-			}
+//			NodeList nodeList = metaDoc.getElementsByTagName("ATLConfocalSettingDefinition");
+//			for (int n = 0; n < nodeList.getLength(); n++) {
+//				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Type: "
+//						+ nodeList.item(n).getNodeType(), ProgressDialog.LOG);
+//				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Name: "
+//						+ nodeList.item(n).getNodeName(), ProgressDialog.LOG);
+//				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Value: "
+//						+ nodeList.item(n).getNodeValue(), ProgressDialog.LOG);
+//				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Content: "
+//						+ nodeList.item(n).getTextContent(), ProgressDialog.LOG);
+//				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " NodeMap:",
+//						ProgressDialog.LOG);
+//				for (int i = 0; i < nodeList.item(n).getAttributes().getLength(); i++) {
+//					progress.notifyMessage("" + nodeList.item(n).getAttributes().item(i), ProgressDialog.LOG);
+//				}
+////				progress.notifyMessage("Task " + (task+1) + "/" + tasks + ": Node " + (n+1) + " Content: " + nodeList.item(n).getFeature("Name", ""), ProgressDialog.LOG);
+//			}
 		}
 		
 		
@@ -1005,42 +1049,53 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				 * "c00" = first channel).
 				 */
 
-				IJ.log("Verify " + fileList[f]);
+				if(extendedLogging) progress.notifyMessage("Verify " + fileList[f],ProgressDialog.LOG);
 
 				if (!fileList[f].contains(series))
 					continue scanningFilenames;
-				if (!fileList[f].contains("_z"))
-					continue scanningFilenames; // TODO make optional
-				if (!fileList[f].contains("_c"))
-					continue scanningFilenames; // TODO make optional
-
-				IJ.log("Accepted " + fileList[f]);
+				if(metadataFileEnding.equals("xml")) {
+					if (!(fileList[f].contains("_z")))
+						continue scanningFilenames; // TODO make optional
+					if (!(fileList[f].contains("_c")))
+						continue scanningFilenames; // TODO make optional
+				}else if(metadataFileEnding.equals("xlif")){
+					if (!(fileList[f].contains("--Z")))
+						continue scanningFilenames; // TODO make optional
+					if (!(fileList[f].contains("--C")))
+						continue scanningFilenames; // TODO make optional
+				}else {
+					//TODO
+				}
+				
+				if(extendedLogging) progress.notifyMessage("Accepted " + fileList[f],ProgressDialog.LOG);
 
 				if (fileList[f].endsWith(".tif") || fileList[f].endsWith(".TIF")
 						|| fileList[f].endsWith(".tiff") || fileList[f].endsWith(".TIFF")) {
 					tempFile = fileList[f];
 
 					// Now open the file and save it as an OME-Tiff
-					IJ.log("Open " + directory + "" + System.getProperty("file.separator") + filename
-							+ System.getProperty("file.separator") + tempFile);
+					if(extendedLogging) progress.notifyMessage("Open " + directory + "" + System.getProperty("file.separator") + filename
+							+ System.getProperty("file.separator") + tempFile,ProgressDialog.LOG);
 					imp = IJ.openImage(directory + "" + System.getProperty("file.separator") + filename
 							+ System.getProperty("file.separator") + tempFile);
-
+										
 					plane = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_z") + 2,
 							tempFile.toLowerCase().lastIndexOf("_z") + 4);
 					channel = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_ch") + 3,
 							tempFile.toLowerCase().lastIndexOf("_ch") + 5);
-					IJ.log("Z " + plane + " - C " + channel);
+					if(extendedLogging) progress.notifyMessage("Z " + plane + " - C " + channel,ProgressDialog.LOG);
 
-					new File(outPath + filename + "_" + series + System.getProperty("file.separator"))
+					new File(outPath + filename + "_" + series + "_Z" + plane + System.getProperty("file.separator"))
 							.mkdir();
-					String outfilepath = outPath + filename + "_" + series
-							+ System.getProperty("file.separator") + series + "_C" + channel + ".ome.tif";
+					String outfilepath = outPath + filename + "_" + series + "_Z" + plane + System.getProperty("file.separator") 
+						+ series + "_Z" + plane + "_C" + channel + ".ome.tif";
 					IJ.saveAs(imp, "Tiff", outfilepath);
 					imp.close();
-
+					
+					
+					//TODO Generate OME XML FROM METADATA
 					try {
-						this.replaceXMLInTif(outfilepath, "<This is the added description>");
+						this.replaceXMLInTif(outfilepath, "<This is the added description>", true);
 					} catch (Exception e) {
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
@@ -1053,19 +1108,19 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						return false;
 					}
 
-					try {
-						this.addOMEXMLtoTif(outfilepath, metaDataXMLString);
-					} catch (Exception e) {
-						String out = "";
-						for (int err = 0; err < e.getStackTrace().length; err++) {
-							out += " \n " + e.getStackTrace()[err].toString();
-						}
-						progress.notifyMessage(
-								"Task " + (task + 1) + "/" + tasks + ": Could not process " + series
-										+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
-								ProgressDialog.ERROR);
-						return false;
-					}
+//					try {
+//						this.addOMEXMLtoTif(outfilepath, metaDataXMLString);
+//					} catch (Exception e) {
+//						String out = "";
+//						for (int err = 0; err < e.getStackTrace().length; err++) {
+//							out += " \n " + e.getStackTrace()[err].toString();
+//						}
+//						progress.notifyMessage(
+//								"Task " + (task + 1) + "/" + tasks + ": Could not process " + series
+//										+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
+//								ProgressDialog.ERROR);
+//						return false;
+//					}
 				}
 			}
 		}
@@ -1074,5 +1129,103 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		return true;
 	}
 	
+	void insertBioFormatsXML(String file, String xmlInput, boolean extendedLogging, boolean wholeLogging) throws IOException, FormatException, ServiceException, DependencyException {
+		// read comment
+		progress.notifyMessage("Generating XML for " + file + " ", ProgressDialog.LOG);
+		progress.updateBarText("Reading " + file + " ");
+		
+		String comment = new TiffParser(file).getComment();
+		// or if you already have the file open for random access, you can use:
+		// RandomAccessInputStream fin = new RandomAccessInputStream(f);
+		// TiffParser tiffParser = new TiffParser(fin);
+		// String comment = tiffParser.getComment();
+		// fin.close();
+		progress.updateBarText("Reading " + file + " done!");
+		// display comment, and prompt for changes
+		if(wholeLogging) {
+			progress.notifyMessage("Original comment in file:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+		}
+		
+		//Converting XML to OME
+		//TODO REMOVE FROM HERE and start developing
+		ServiceFactory factory = new ServiceFactory();
+		OMEXMLService service = factory.getInstance(OMEXMLService.class);
+		IMetadata omexmlMeta = service.createOMEXMLMetadata(xmlInput);
+		
+		
+		//Cleaning up the XML
+		{
+
+			/**
+			 * Import the XML - generate document to read from it
+			 */
+			Document metaDoc = null;
+			String metaDataXMLString = comment+"";
+//			InputStream xmlIs = org.apache.commons.io.IOUtils.toInputStream(metaDataXMLString);	
+			InputStream xmlIs = new java.io.ByteArrayInputStream(metaDataXMLString.getBytes(StandardCharsets.UTF_8));
+			//Note usually it is UTF-8 but it is also specified in the OME-String.
+			
+			{			
+				try {
+					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+					DocumentBuilder db = dbf.newDocumentBuilder();
+															
+					metaDoc = db.parse(xmlIs);
+					metaDoc.getDocumentElement().normalize();
+				} catch (SAXException | IOException | ParserConfigurationException e) {
+					String out = "";
+					for (int err = 0; err < e.getStackTrace().length; err++) {
+						out += " \n " + e.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Could not process "
+							+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
+							ProgressDialog.ERROR);
+					return;
+				}
+				
+				//Write document back to string
+				if(extendedLogging)	IJ.log("A: " + metaDataXMLString);
+				try {
+				    Transformer tf = TransformerFactory.newInstance().newTransformer();
+				    StreamResult strRes = new StreamResult(new StringWriter());
+				    DOMSource metaDocSource = new DOMSource(metaDoc);				    
+				    tf.transform(metaDocSource, strRes);
+				    metaDataXMLString = strRes.getWriter().toString();
+				} catch(TransformerException tfe) {
+				    tfe.printStackTrace();
+				    String out = "";
+					for (int err = 0; err < tfe.getStackTrace().length; err++) {
+						out += " \n " + tfe.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Could not convert document to String"
+							+ " - Error " + tfe.getCause() + " - Detailed message:\n" + out,
+							ProgressDialog.ERROR);
+				}
+				if(extendedLogging)	IJ.log("B: " + metaDataXMLString);
+				
+			}
+			// hand back the edited comment
+			comment = metaDataXMLString;
+		}
+
+		if(wholeLogging) {
+			progress.notifyMessage("New comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);			
+		}
+		
+		// save results back to the TIFF file
+		TiffSaver saver = new TiffSaver(file);
+		RandomAccessInputStream in = new RandomAccessInputStream(file);
+		saver.overwriteComment(in, comment);
+		in.close();
+
+		comment = new TiffParser(file).getComment();
+
+		if(wholeLogging) {
+			progress.notifyMessage("Saved comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+		}
+	}
 
 }// end main class
