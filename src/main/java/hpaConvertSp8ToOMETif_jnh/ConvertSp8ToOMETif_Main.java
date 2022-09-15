@@ -70,13 +70,19 @@ import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
 import loci.formats.FormatException;
 import loci.formats.ImageReader;
+import loci.formats.MetadataTools;
 import loci.formats.in.MetadataOptions;
 import loci.formats.meta.IMetadata;
+import loci.formats.meta.MetadataRetrieve;
+import loci.formats.meta.MetadataStore;
 import loci.formats.out.OMETiffWriter;
 import loci.formats.services.OMEXMLService;
 import loci.formats.tiff.TiffParser;
 //import loci.formats.FormatException;
 import loci.formats.tiff.TiffSaver;
+import ome.xml.meta.MetadataConverter;
+import ome.xml.model.OME;
+import ome.xml.model.OMEModel;
 
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
@@ -132,7 +138,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		String dir[] = { "", "" };
 		String fullPath[] = { "", "" };
 
-		boolean loadLif = false;	//TODO make optional
+		boolean loadLif = true;	//TODO make optional
 		if (loadLif) {
 			OpenFilesDialog od = new OpenFilesDialog(false);
 			od.setLocation(0, 0);
@@ -457,11 +463,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		reader.setOriginalMetadataPopulated(true);
 		reader.setMetadataStore(omexmlMeta);
 		reader.setId(id);
-
+		
 		// configure OME-TIFF writer
 		writer.setMetadataRetrieve(omexmlMeta);
-		MetadataOptions opt = writer.getMetadataOptions();
-		
+
 		// writer.setCompression("J2K");
 
 		// write out image planes
@@ -562,17 +567,366 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		for(int f = 0; f < savedFilePaths.size(); f++) {
 			progress.setBar(0.4+(0.4*f/(double)savedFilePaths.size()));
 			progress.updateBarText("Cleaning XML " + savedFilePaths.get(f).substring(savedFilePaths.get(f).lastIndexOf(System.getProperty("file.separator"))+1) + "...");
-			cleanUpOmeTifXmlString(savedFilePaths.get(f), false, true);
+			if(id.substring(id.lastIndexOf(".")).equals(".lif")) {
+				progress.notifyMessage("Clean lif based xml", ProgressDialog.ERROR);				
+				cleanUpOmeTifFromLifXmlString(savedFilePaths.get(f), false, true);
+			}else if(id.substring(id.lastIndexOf(".")).equals(".xlef")) {
+				progress.notifyMessage("Clean xlef based xml", ProgressDialog.ERROR);
+				cleanUpOmeTifFromXlefXmlString(savedFilePaths.get(f), false, true);
+			}
+			
 		}
 		
 		progress.notifyMessage("Converted " + id + " to " + outId + "...", ProgressDialog.LOG);
 	}
 	
 	/**
-	 * Cleanup XML in OME TIF single image files
+	 * Cleanup XML in OME TIF single image files generated from a Lif file
 	 * This code should remove all information related to series that are not in this image.
 	 * */
-	void cleanUpOmeTifXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
+	void cleanUpOmeTifFromLifXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
+		// read comment
+		progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
+		progress.updateBarText("Reading " + file + " ");
+		
+		String comment = new TiffParser(file).getComment();
+		// or if you already have the file open for random access, you can use:
+		// RandomAccessInputStream fin = new RandomAccessInputStream(f);
+		// TiffParser tiffParser = new TiffParser(fin);
+		// String comment = tiffParser.getComment();
+		// fin.close();
+		progress.updateBarText("Reading " + file + " done!");
+		// display comment, and prompt for changes
+		if(logWholeComments) {
+			progress.notifyMessage("Original comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+			
+		}
+		
+		
+		//Cleaning up the XML
+		{
+
+			/**
+			 * Import the XML - generate document to read from it
+			 */
+			Document metaDoc = null;
+			String metaDataXMLString = comment+"";
+//			InputStream xmlIs = org.apache.commons.io.IOUtils.toInputStream(metaDataXMLString);	
+			InputStream xmlIs = new java.io.ByteArrayInputStream(metaDataXMLString.getBytes(StandardCharsets.UTF_8));
+			//Note usually it is UTF-8 but it is also specified in the OME-String.
+			
+			{			
+				try {
+					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+					DocumentBuilder db = dbf.newDocumentBuilder();
+															
+					metaDoc = db.parse(xmlIs);
+					metaDoc.getDocumentElement().normalize();
+				} catch (SAXException | IOException | ParserConfigurationException e) {
+					String out = "";
+					for (int err = 0; err < e.getStackTrace().length; err++) {
+						out += " \n " + e.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Could not process "
+							+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
+							ProgressDialog.ERROR);
+					return;
+				}
+
+				
+				/*
+				 * Editing starts - Let's first find out the uuid of the saved image and the image that it belongs to in the metadata so we know what to keep!
+				 * In the XML the uuid of the respective image is stored in the parent node (<OME ...>) as an argument called UUID = "". We need to retrieve that first.
+				 * Then, in the XML file each image is saved as an <Image> node, and under each Image 
+				 * node there is an item called <Pixels>, under which each image plane is stored as a <TiffData> 
+				 * node containing a <UUID> node, whose content is the UUID containing also the argument FileName.
+				 * E.g., thge TiffData node can look like this:
+				 * 	<TiffData FirstC="1" FirstT="0" FirstZ="0" IFD="0" PlaneCount="1">
+               	 *		<UUID FileName="20220513_JNH008_E5_PFATrit0p1_GT335_1k_S0_Z00_C01.ome.tif">urn:uuid:615a14da-fcf8-4184-be60-df092f26fa1c</UUID>
+            	 *	</TiffData>
+            	 *	We need to scan through all image nodes and there screen these TiffData nodes to find out the corresponding image in which the UUID is contained. 
+            	 *	Then we want to store the image ID and image Name in which the uuid is stored. Both of these parameters are attributes of an <Image> (Image objects look e.g. like: <Image ID="Image:0" Name="Series001"> ...)
+            	 * 	Then from that image we can find out which Instrument ID belongs to it, since under the image node there is an <InstrumentRef> node. We only need to keep instrument settings for this InstrumentID
+				 * */
+				
+				//Supportive variables
+				NodeList nodeList, childNodes, grandChildNodes;
+				
+				
+				//Retrieve UUID
+				String uuid = "none";
+				{
+					uuid = metaDoc.getElementsByTagName("OME").item(0).getAttributes().getNamedItem("UUID").getNodeValue();
+					if(extendedLogging) progress.notifyMessage("Detected uuid:	" + uuid, ProgressDialog.ERROR);
+				}				
+				if(uuid.equals("none")) {
+					progress.notifyMessage("Failed to read uuid",ProgressDialog.ERROR);
+					return;					
+				}
+				
+				//Retrieve ImageID
+				String imageID = null;
+				String imageName = "NoImageNameDetected";
+				int imageIndexInAllImageNodes = -1;
+				{
+					nodeList = metaDoc.getElementsByTagName("Image");
+					findingUuidInImages: for (int n = 0; n < nodeList.getLength(); n++) {
+						childNodes = nodeList.item(n).getChildNodes();
+						int pixelC = -1;
+						for (int c = 0; c < childNodes.getLength(); c++) {
+							if(childNodes.item(c).getNodeName().equals("Pixels")) {
+								pixelC = c;
+								if(extendedLogging) progress.notifyMessage("Accepted childNode " + c + " - Name: " + childNodes.item(c).getNodeName(),ProgressDialog.LOG);
+								break;
+							}else {
+								if(extendedLogging) progress.notifyMessage("Discarded childNode " + c + " - Name: " + childNodes.item(c).getNodeName(),ProgressDialog.LOG);
+							}
+						}
+						if(extendedLogging) progress.notifyMessage("Decided item nr " + pixelC + "",ProgressDialog.LOG);
+						
+						//Now go into the subnodes of Pixel, search for <TiffData> nodes and retrieve the UUID element in there. 
+						//When the UUID matches to the uuid we look for, verify that the filename matches the attribute FileName. If it does, save that ImageID.
+						childNodes = childNodes.item(pixelC).getChildNodes();
+						 for (int c = 0; c < childNodes.getLength(); c++) {							
+							if(childNodes.item(c).getNodeName().equals("TiffData")) {
+								if(extendedLogging) progress.notifyMessage("Found TiffChildNode at " + c + "",ProgressDialog.LOG);
+								grandChildNodes = childNodes.item(c).getChildNodes();
+								for (int cc = 0; cc < grandChildNodes.getLength(); cc++) {
+									if(grandChildNodes.item(cc).getTextContent().equals(uuid)) {										
+										if(extendedLogging) progress.notifyMessage("Found uuidNode " + cc + " - UUID: " + grandChildNodes.item(cc).getTextContent(),ProgressDialog.LOG);
+										if(extendedLogging) progress.notifyMessage("Noted FileName for UUID: " + grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue(),ProgressDialog.LOG);	
+										
+										if(extendedLogging) progress.notifyMessage("Does it match to " + file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1) + "?",ProgressDialog.LOG);	
+										if(grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue().equals(file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1))) {
+											if(extendedLogging) progress.notifyMessage("YES!",ProgressDialog.LOG);
+											imageID = nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue();
+											imageName = nodeList.item(n).getAttributes().getNamedItem("Name").getNodeValue();
+											imageIndexInAllImageNodes = n;
+											if(extendedLogging) progress.notifyMessage("ImageID: " + imageID,ProgressDialog.LOG);	
+											if(extendedLogging) progress.notifyMessage("ImageName: " + imageName,ProgressDialog.LOG);	
+											if(extendedLogging) progress.notifyMessage("ImageIndex: " + imageIndexInAllImageNodes,ProgressDialog.LOG);	
+											break findingUuidInImages;
+										}
+									}
+										
+								}
+							}else {
+								if(extendedLogging) progress.notifyMessage("Refused childnode " + c + ", which is " + childNodes.item(c).getNodeName(),ProgressDialog.LOG);								
+							}
+						}
+						
+						
+					}
+				}
+				nodeList = null;
+				childNodes = null;
+				grandChildNodes = null;
+				if(imageName.equals( "NoImageNameDetected")) {
+					progress.notifyMessage("Failed to detect image name",ProgressDialog.ERROR);
+					return;
+				}
+				
+				//Retrieve Instrument ID
+				String instrumentID = "missing";				
+				nodeList = metaDoc.getElementsByTagName("Image").item(imageIndexInAllImageNodes).getChildNodes();
+				for (int n = 0; n < nodeList.getLength(); n++) {
+					if(nodeList.item(n).getNodeName().equals("InstrumentRef")) {
+						instrumentID = nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue();
+						if(extendedLogging) progress.notifyMessage("Instrument ID: " + instrumentID,ProgressDialog.LOG);	
+						break;
+					}
+					if(n == nodeList.getLength()-1) {
+						progress.notifyMessage("Could not find instrumentID",ProgressDialog.ERROR);	
+						return;
+					}
+				}
+				nodeList = null;
+				
+				if(extendedLogging) progress.notifyMessage("Retrieved all parameters :)",ProgressDialog.LOG);			
+				
+				/*
+				 * Now we start the cleaning. We know which image and instrument object to keep and can clear everything else.
+				 * */
+				
+				//Scan through images and remove obsolete image nodes
+				{
+					nodeList = metaDoc.getElementsByTagName("Image");
+					for (int n = nodeList.getLength()-1; n >=0; n--) {						
+						if(n == imageIndexInAllImageNodes) {							
+							continue;
+						}
+						if(extendedLogging) progress.notifyMessage("Deleting image node " + n 
+								+ " (" + nodeList.item(n).getAttributes().item(0) 
+								+ " " + nodeList.item(n).getAttributes().item(1) + ")",ProgressDialog.LOG);
+						
+						//not relevant image node > delete it
+						nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
+					}
+				}
+				
+				//Scan through instruments and remove obsolete instruments nodes
+				{
+					nodeList = metaDoc.getElementsByTagName("Instrument");
+					for (int n = nodeList.getLength()-1; n >=0; n--) {
+						if(nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue().equals(instrumentID)) {
+							if(extendedLogging) progress.notifyMessage("Keeping instrument node " + n 
+									+ " (ID = " + nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue() + ")",ProgressDialog.LOG);
+							continue;
+						}
+						
+						if(extendedLogging) progress.notifyMessage("Deleting instrument node " + n 
+								+ " (ID = " + nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue() + ")",ProgressDialog.LOG);
+						
+						//not relevant image node > delete it
+						nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
+					}
+				}
+				
+				/**
+				 * Scan through extended metadata and remove obsolete original metadata nodes
+				 * The structure of the original metadata nodes is as follows (example, "<" removed to avoid xml detection):
+				 * <XMLAnnotation ID="Annotation:0" Namespace="openmicroscopy.org/OriginalMetadata">
+				 *     Value>
+				 *         OriginalMetadata>
+				 *             Key>
+				 *             		Series002 Image #0|ATLConfocalSettingDefinition #0|DetectorList #0|Detector #0|IsEnabled
+				 *             /Key>
+				 *             Value>
+				 *             		1
+				 *             /Value>
+				 *         /OriginalMetadata>
+				 *     /Value>
+				 * /XMLAnnotation>
+				 */
+				{
+					nodeList = metaDoc.getElementsByTagName("XMLAnnotation");
+					for (int n = nodeList.getLength()-1; n >=0; n--) {
+						childNodes = nodeList.item(n).getChildNodes();
+						for(int c1 = childNodes.getLength()-1; c1 >= 0; c1--) {
+							if(!childNodes.item(c1).getNodeName().equals("Value")) {
+								if(extendedLogging) progress.notifyMessage("Node of type " + childNodes.item(c1).getNodeName() + " in XML Annotation " + n,ProgressDialog.NOTIFICATION);
+								continue;
+							}
+							grandChildNodes = childNodes.item(c1).getChildNodes();
+							for(int c2 = grandChildNodes.getLength()-1; c2 >= 0; c2--) {
+								if(!grandChildNodes.item(c2).getNodeName().equals("OriginalMetadata")) {
+									if(extendedLogging) progress.notifyMessage("Node of type " + grandChildNodes.item(c2).getNodeName() + " in XML Annotation " + n + " Value " + c1,ProgressDialog.NOTIFICATION);
+									continue;
+								}
+								
+								//Verify that key is given as first element
+								if(!grandChildNodes.item(c2).getChildNodes().item(0).getNodeName().equals("Key")) {
+									if(extendedLogging) progress.notifyMessage("Key missing in Original Metadata - XML Annotation " + n + " Value " + c1 + " Or.Metad. " + c2,ProgressDialog.NOTIFICATION);
+									continue;
+								}
+
+								//Verify that key starts with ImageName		
+								if(grandChildNodes.item(c2).getChildNodes().item(0).getTextContent().startsWith(imageName)) {
+									//keep the XML Annotation
+//									if(extendedLogging) progress.notifyMessage("         KEEP node " + n 
+//											+ " (ID " + nodeList.item(n).getAttributes().getNamedItem("ID") 
+//											+ " Content " + grandChildNodes.item(c2).getChildNodes().item(0).getTextContent() + ")",ProgressDialog.LOG);									
+								}else {
+									//delete the XML Annotation node since it belongs to a different image
+//									if(extendedLogging) progress.notifyMessage("Deleting image node " + n 
+//											+ " (ID " + nodeList.item(n).getAttributes().getNamedItem("ID") 
+//											+ " Content " + grandChildNodes.item(c2).getChildNodes().item(0).getTextContent() + ")",ProgressDialog.LOG);
+									nodeList.item(n).getParentNode().removeChild(nodeList.item(n));	
+								}
+							}
+						}	
+					}
+
+					/*
+					 * Since the XML annotation IDs are named with consecutive numbers (ID="Annotation:0" etc.), we need to adjust these numbers for the remaining nodes
+					 * */
+					nodeList = metaDoc.getElementsByTagName("XMLAnnotation");
+					org.w3c.dom.Element attrib;
+					for (int n = 0; n < nodeList.getLength(); n++) {
+//					    if(extendedLogging) progress.notifyMessage("Adjust " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
+						attrib = (org.w3c.dom.Element) nodeList.item(n);
+					    attrib.setAttribute("ID", "Annotation:" + n);
+//					    if(extendedLogging) progress.notifyMessage("   Adjusted " + nodeList.item(n).getAttributes().getNamedItem("ID"),ProgressDialog.LOG);
+					}
+					
+					
+					/**
+					 * LIMS always reads only the Image:0 notes > change Image name to Image:0
+					 * Change instrument also to Instrument:0 ?
+					 * */
+					{
+						nodeList = metaDoc.getElementsByTagName("Image");
+						for (int n = nodeList.getLength()-1; n >=0; n--) {						
+							if(nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue().equals(imageID)) {
+								if(extendedLogging) progress.notifyMessage("Changing image ID from " + nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue()
+										+ " to Image:0",ProgressDialog.LOG);
+								nodeList.item(n).getAttributes().getNamedItem("ID").setNodeValue("Image:0");
+							}
+							
+							
+							//not relevant image node > delete it
+							nodeList.item(n).getParentNode().removeChild(nodeList.item(n));				
+						}
+					}
+					
+					
+					/**
+					 * TODO
+					 * Should we change the IFDs to completely remove the Z stack? Instead use a z position?
+					 * Fix Channel information based on OriginalMetadata?
+					 * */
+				}
+				
+				//Write document back to string
+				if(extendedLogging)	IJ.log("A: " + metaDataXMLString);
+				try {
+				    Transformer tf = TransformerFactory.newInstance().newTransformer();
+				    StreamResult strRes = new StreamResult(new StringWriter());
+				    DOMSource metaDocSource = new DOMSource(metaDoc);				    
+				    tf.transform(metaDocSource, strRes);
+				    metaDataXMLString = strRes.getWriter().toString();
+				} catch(TransformerException tfe) {
+				    tfe.printStackTrace();
+				    String out = "";
+					for (int err = 0; err < tfe.getStackTrace().length; err++) {
+						out += " \n " + tfe.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Could not convert document to String"
+							+ " - Error " + tfe.getCause() + " - Detailed message:\n" + out,
+							ProgressDialog.ERROR);
+				}
+				if(extendedLogging)	IJ.log("B: " + metaDataXMLString);
+				
+			}
+			// hand back the edited comment
+			comment = metaDataXMLString;
+		}
+
+		if(logWholeComments) {
+			progress.notifyMessage("New comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);			
+		}
+		
+		// save results back to the TIFF file
+		TiffSaver saver = new TiffSaver(file);
+		RandomAccessInputStream in = new RandomAccessInputStream(file);
+		saver.overwriteComment(in, comment);
+		in.close();
+
+		comment = new TiffParser(file).getComment();
+
+		if(logWholeComments) {
+			progress.notifyMessage("Saved comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+		}
+	}
+	
+	/**
+	 * Cleanup XML in OME TIF single image files generated from a Leica XLEF file
+	 * This code should remove all information related to series that are not in this image.
+	 * */
+	void cleanUpOmeTifFromXlefXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
 		progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
 		progress.updateBarText("Reading " + file + " ");
@@ -1035,7 +1389,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			// Get all files in the folder
 			String[] fileList = new File(directory + "" + System.getProperty("file.separator") + filename)
 					.list();
-			String tempFile, plane, channel;
+			String tempFile, slice, channel;
 			ImagePlus imp;
 
 			// Scanning filenames, extract the relevant filenames and avoid duplicates
@@ -1072,55 +1426,142 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				if (fileList[f].endsWith(".tif") || fileList[f].endsWith(".TIF")
 						|| fileList[f].endsWith(".tiff") || fileList[f].endsWith(".TIFF")) {
 					tempFile = fileList[f];
-
-					// Now open the file and save it as an OME-Tiff
-					if(extendedLogging) progress.notifyMessage("Open " + directory + "" + System.getProperty("file.separator") + filename
-							+ System.getProperty("file.separator") + tempFile,ProgressDialog.LOG);
-					imp = IJ.openImage(directory + "" + System.getProperty("file.separator") + filename
-							+ System.getProperty("file.separator") + tempFile);
-										
-					plane = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_z") + 2,
-							tempFile.toLowerCase().lastIndexOf("_z") + 4);
-					channel = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_ch") + 3,
-							tempFile.toLowerCase().lastIndexOf("_ch") + 5);
-					if(extendedLogging) progress.notifyMessage("Z " + plane + " - C " + channel,ProgressDialog.LOG);
-
-					new File(outPath + filename + "_" + series + "_Z" + plane + System.getProperty("file.separator"))
-							.mkdir();
-					String outfilepath = outPath + filename + "_" + series + "_Z" + plane + System.getProperty("file.separator") 
-						+ series + "_Z" + plane + "_C" + channel + ".ome.tif";
-					IJ.saveAs(imp, "Tiff", outfilepath);
-					imp.close();
 					
-					
-					//TODO Generate OME XML FROM METADATA
 					try {
-						this.replaceXMLInTif(outfilepath, "<This is the added description>", true);
-					} catch (Exception e) {
+						ImageReader reader = new ImageReader();
+						OMETiffWriter writer = new OMETiffWriter();
+	
+						String inId = directory + "" + System.getProperty("file.separator") + filename
+										+ System.getProperty("file.separator") + tempFile;
+																	
+						if(extendedLogging) progress.updateBarText("Converting " + tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator"))+1) + "...");
+						if(extendedLogging) progress.notifyMessage("Filepath " + inId,ProgressDialog.LOG);
+	
+						// record metadata to OME-XML format
+						ServiceFactory factory = new ServiceFactory();
+						OMEXMLService service = factory.getInstance(OMEXMLService.class);
+						IMetadata omexmlMeta = service.createOMEXMLMetadata();
+						reader.setOriginalMetadataPopulated(true);
+						reader.setMetadataStore(omexmlMeta);
+						reader.setId(inId);
+	
+						// configure OME-TIFF writer
+						writer.setMetadataRetrieve(omexmlMeta);
+						
+						// writer.setCompression("J2K");
+	
+						// write out image planes
+						int seriesCount = reader.getSeriesCount();
+						int planeCounts [] = new int [seriesCount];
+						
+						LinkedList <String> savedFilePaths = new LinkedList <String>();
+						String tempTxt, ZTxt, CTxt;
+						String outFilePath;
+						
+						File fileDir;	
+						for (int s = 0; s < seriesCount; s++) {
+							progress.setBar(s/seriesCount*0.4);
+							reader.setSeries(s);
+							writer.setSeries(s);						
+							
+							planeCounts [s] = reader.getImageCount();
+							for (int p = 0; p < planeCounts [s]; p++) {
+								progress.setBar((s/(double)seriesCount+p/(double)planeCounts [s]/(double)seriesCount)*0.4);
+								byte[] plane = reader.openBytes(p);
+								int [] coords = reader.getZCTCoords(p);
+								if(extendedLogging) progress.notifyMessage("Reader Z " + coords [0] + " - C " + coords [1] + " - T " + coords [2]  ,ProgressDialog.LOG);
+										
+								slice = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_z") + 2,
+										tempFile.toLowerCase().lastIndexOf("_z") + 4);
+								channel = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_ch") + 3,
+										tempFile.toLowerCase().lastIndexOf("_ch") + 5);
+								if(extendedLogging) progress.notifyMessage("Z " + slice + " - C " + channel,ProgressDialog.LOG);
+
+								new File(outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator"))
+										.mkdir();
+								outFilePath = outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator") 
+									+ series + "_Z" + slice + "_C" + channel + ".ome.tif";
+								
+								//Saving file
+								writer.setId(outFilePath);
+								// write plane to output file
+								writer.saveBytes(p, plane);
+							}
+							progress.updateBarText("Converting " + tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
+						}
+						progress.updateBarText("Converted - closing metadata writer...");
+						writer.close();
+						progress.updateBarText("Converted - closing metadata reader...");
+						reader.close();
+					} catch (FormatException | IOException | DependencyException | ServiceException e) {
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
 							out += " \n " + e.getStackTrace()[err].toString();
 						}
-						progress.notifyMessage(
-								"Task " + (task + 1) + "/" + tasks + ": Could not process " + series
-										+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
+						progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process " + series + " because of error:" 
+								+ "\\nCause: " + e.getCause() 
+								+ "\nMessage: " + e.getMessage() + "\nLocalizedMessage: " + e.getLocalizedMessage() + "\nDetailed message:\n" + out,
 								ProgressDialog.ERROR);
 						return false;
 					}
+					
+					
+					
+					
+					
+					
+					// Now open the file and save it as an OME-Tiff
+					boolean goon = false;
+					if(goon) {
+						if(extendedLogging) progress.notifyMessage("Open " + directory + "" + System.getProperty("file.separator") + filename
+								+ System.getProperty("file.separator") + tempFile,ProgressDialog.LOG);
+						imp = IJ.openImage(directory + "" + System.getProperty("file.separator") + filename
+								+ System.getProperty("file.separator") + tempFile);
+											
+						slice = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_z") + 2,
+								tempFile.toLowerCase().lastIndexOf("_z") + 4);
+						channel = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_ch") + 3,
+								tempFile.toLowerCase().lastIndexOf("_ch") + 5);
+						if(extendedLogging) progress.notifyMessage("Z " + slice + " - C " + channel,ProgressDialog.LOG);
 
-//					try {
-//						this.addOMEXMLtoTif(outfilepath, metaDataXMLString);
-//					} catch (Exception e) {
-//						String out = "";
-//						for (int err = 0; err < e.getStackTrace().length; err++) {
-//							out += " \n " + e.getStackTrace()[err].toString();
-//						}
-//						progress.notifyMessage(
-//								"Task " + (task + 1) + "/" + tasks + ": Could not process " + series
-//										+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
-//								ProgressDialog.ERROR);
-//						return false;
-//					}
+						new File(outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator"))
+								.mkdir();
+						String outfilepath = outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator") 
+							+ series + "_Z" + slice + "_C" + channel + ".ome.tif";
+										
+						IJ.saveAs(imp, "Tiff", outfilepath);
+						imp.close();
+						
+						
+						try {
+							this.insertBioFormatsXML(outfilepath, metaDataXMLString, true, true);
+						} catch (IOException | FormatException | ServiceException | DependencyException e) {
+							String out = "";
+							for (int err = 0; err < e.getStackTrace().length; err++) {
+								out += " \n " + e.getStackTrace()[err].toString();
+							}
+							progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process " + series + " because of error:" 
+									+ "\\nCause: " + e.getCause() 
+									+ "\nMessage: " + e.getMessage() + "\nLocalizedMessage: " + e.getLocalizedMessage() + "\nDetailed message:\n" + out,
+									ProgressDialog.ERROR);
+							return false;
+						}
+						
+						//TODO Generate OME XML FROM METADATA
+						try {
+							replaceXMLInTif(outfilepath, "<This is the added description>", true);
+						} catch (Exception e) {
+							String out = "";
+							for (int err = 0; err < e.getStackTrace().length; err++) {
+								out += " \n " + e.getStackTrace()[err].toString();
+							}
+							progress.notifyMessage(
+									"Task " + (task + 1) + "/" + tasks + ": Could not process " + series
+											+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
+									ProgressDialog.ERROR);
+							return false;
+						}
+					}
 				}
 			}
 		}
@@ -1150,65 +1591,20 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		//Converting XML to OME
 		//TODO REMOVE FROM HERE and start developing
 		ServiceFactory factory = new ServiceFactory();
-		OMEXMLService service = factory.getInstance(OMEXMLService.class);
-		IMetadata omexmlMeta = service.createOMEXMLMetadata(xmlInput);
+		OMEXMLService service = factory.getInstance(OMEXMLService.class);		
+		IMetadata omexmlMeta = service.createOMEXMLMetadata();
+		service.convertMetadata(xmlInput, omexmlMeta);
+		service.createOMEXMLRoot(xmlInput);
 		
 		
-		//Cleaning up the XML
-		{
+//		xmlMeta = omeXmlService.createOMEXMLMetadata(xml);
+//        log.info("Converting to OMERO metadata");
+//        MetadataConverter.convertMetadata(xmlMeta, target);
+		
+//		IMetadata meta = 
 
-			/**
-			 * Import the XML - generate document to read from it
-			 */
-			Document metaDoc = null;
-			String metaDataXMLString = comment+"";
-//			InputStream xmlIs = org.apache.commons.io.IOUtils.toInputStream(metaDataXMLString);	
-			InputStream xmlIs = new java.io.ByteArrayInputStream(metaDataXMLString.getBytes(StandardCharsets.UTF_8));
-			//Note usually it is UTF-8 but it is also specified in the OME-String.
-			
-			{			
-				try {
-					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-					DocumentBuilder db = dbf.newDocumentBuilder();
-															
-					metaDoc = db.parse(xmlIs);
-					metaDoc.getDocumentElement().normalize();
-				} catch (SAXException | IOException | ParserConfigurationException e) {
-					String out = "";
-					for (int err = 0; err < e.getStackTrace().length; err++) {
-						out += " \n " + e.getStackTrace()[err].toString();
-					}
-					progress.notifyMessage("Could not process "
-							+ " - Error " + e.getCause() + " - Detailed message:\n" + out,
-							ProgressDialog.ERROR);
-					return;
-				}
-				
-				//Write document back to string
-				if(extendedLogging)	IJ.log("A: " + metaDataXMLString);
-				try {
-				    Transformer tf = TransformerFactory.newInstance().newTransformer();
-				    StreamResult strRes = new StreamResult(new StringWriter());
-				    DOMSource metaDocSource = new DOMSource(metaDoc);				    
-				    tf.transform(metaDocSource, strRes);
-				    metaDataXMLString = strRes.getWriter().toString();
-				} catch(TransformerException tfe) {
-				    tfe.printStackTrace();
-				    String out = "";
-					for (int err = 0; err < tfe.getStackTrace().length; err++) {
-						out += " \n " + tfe.getStackTrace()[err].toString();
-					}
-					progress.notifyMessage("Could not convert document to String"
-							+ " - Error " + tfe.getCause() + " - Detailed message:\n" + out,
-							ProgressDialog.ERROR);
-				}
-				if(extendedLogging)	IJ.log("B: " + metaDataXMLString);
-				
-			}
-			// hand back the edited comment
-			comment = metaDataXMLString;
-		}
-
+//		comment = service.getOMEXML(omexmlMeta);
+		
 		if(wholeLogging) {
 			progress.notifyMessage("New comment:", ProgressDialog.LOG);
 			progress.notifyMessage(comment, ProgressDialog.LOG);			
