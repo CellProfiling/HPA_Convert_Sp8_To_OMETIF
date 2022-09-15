@@ -1877,9 +1877,57 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * */
 			ServiceFactory factory = new ServiceFactory();
 			OMEXMLService service = factory.getInstance(OMEXMLService.class);
-			IMetadata omexmlMeta = service.createOMEXMLMetadata(comment);
+			IMetadata meta = service.createOMEXMLMetadata(comment);
+			
+			/**
+			 * Verify that x and y position match
+			 * */
+			if(extendedLogging)	progress.notifyMessage("XML PosX: " + metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue(), ProgressDialog.LOG);
+			if(extendedLogging)	progress.notifyMessage("XML PosY: " + metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue(), ProgressDialog.LOG);
+			
+			Double xmlPosX = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue()); 
+			Double xmlPosY = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue()); 
+			
+			for(int i = 0; i < meta.getPlaneCount(0); i++){
+				if(xmlPosX != meta.getPlanePositionX(0, i).value().doubleValue()) {
+					if(extendedLogging)	progress.notifyMessage("OME PosX: " + meta.getPlanePositionX(0, i).value(), ProgressDialog.LOG);
+					if(extendedLogging)	progress.notifyMessage("OME PosY: " + meta.getPlanePositionY(0, i).value(), ProgressDialog.LOG);
+					progress.notifyMessage("XML did not match OME metadata x position! Skipped task " + task + "!", ProgressDialog.ERROR);
+					return;
+				}
+				if(xmlPosY != meta.getPlanePositionY(0, i).value().doubleValue()) {
+					if(extendedLogging)	progress.notifyMessage("OME PosX: " + meta.getPlanePositionX(0, i).value(), ProgressDialog.LOG);
+					if(extendedLogging)	progress.notifyMessage("OME PosY: " + meta.getPlanePositionY(0, i).value(), ProgressDialog.LOG);
+					progress.notifyMessage("XML did not match OME metadata y position! Skipped task " + task + "!", ProgressDialog.ERROR);
+					return;
+				}				
+			}
+			
+			/**
+			 * Add original metadata
+			 * */
+			NodeList tempNodes = metaDoc.getElementsByTagName("Attachment");
+			for(int n = 0; n < tempNodes.getLength(); n++){
+				if(tempNodes.item(n).getAttributes().getNamedItem("Name").getNodeValue().equals("HardwareSetting")) {
+					NamedNodeMap attributes = tempNodes.item(n).getAttributes();
+					for(int a = 0; a < attributes.getLength(); a++) {
+//						meta.setXMLA
+					}
+					break;
+				}
+			}
+			
+			/**
+			 * Translate metadata
+			 * */
+			{
+				
+			}
 						
-			comment = service.getOMEXML(omexmlMeta);
+			/**
+			 * Retrieve new comment
+			 * */
+			comment = service.getOMEXML(meta);
 			
 			if(logWholeComments) {
 				progress.notifyMessage("Comment after adjustments:", ProgressDialog.LOG);
@@ -1890,11 +1938,11 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			/**
 			 * Saving modified tiff comment
 			 * */
-		    TiffSaver saver = new TiffSaver(file);
-		    RandomAccessInputStream in = new RandomAccessInputStream(file);
-		    saver.overwriteComment(in, comment);
-		    in.close();
-			progress.updateBarText("Saving " + file + " done!");
+//		    TiffSaver saver = new TiffSaver(file);
+//		    RandomAccessInputStream in = new RandomAccessInputStream(file);
+//		    saver.overwriteComment(in, comment);
+//		    in.close();
+//			progress.updateBarText("Saving " + file + " done!");
 	}
 	
 }// end main class
