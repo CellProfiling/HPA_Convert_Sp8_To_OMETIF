@@ -57,6 +57,7 @@ import org.apache.commons.io.IOUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
@@ -75,6 +76,7 @@ import loci.formats.in.MetadataOptions;
 import loci.formats.meta.IMetadata;
 import loci.formats.meta.MetadataRetrieve;
 import loci.formats.meta.MetadataStore;
+import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.out.OMETiffWriter;
 import loci.formats.services.OMEXMLService;
 import loci.formats.tiff.TiffParser;
@@ -1877,7 +1879,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * */
 			ServiceFactory factory = new ServiceFactory();
 			OMEXMLService service = factory.getInstance(OMEXMLService.class);
-			IMetadata meta = service.createOMEXMLMetadata(comment);
+			OMEXMLMetadata meta = service.createOMEXMLMetadata(comment);
 			
 			/**
 			 * Verify that x and y position match
@@ -1907,13 +1909,110 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * Add original metadata
 			 * */
 			NodeList tempNodes = metaDoc.getElementsByTagName("Attachment");
+			Node attachmentHardwareSettings = null;
+			NamedNodeMap attributes;
 			for(int n = 0; n < tempNodes.getLength(); n++){
 				if(tempNodes.item(n).getAttributes().getNamedItem("Name").getNodeValue().equals("HardwareSetting")) {
-					NamedNodeMap attributes = tempNodes.item(n).getAttributes();
+					attachmentHardwareSettings = tempNodes.item(n);
+					attributes = tempNodes.item(n).getAttributes();
 					for(int a = 0; a < attributes.getLength(); a++) {
-//						meta.setXMLA
+						service.populateOriginalMetadata(meta, attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+					}
+					
+					NodeList tempNodes2 = tempNodes.item(n).getChildNodes();
+					for(int cn = 0; cn < tempNodes2.getLength(); cn++) {
+						if(tempNodes2.item(cn).getNodeName().equals("ATLConfocalSettingDefinition")){
+							attributes = tempNodes2.item(cn).getAttributes();
+							for(int a = 0; a < attributes.getLength(); a++) {
+								service.populateOriginalMetadata(meta, "ATLConfocalSettingDefinition|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+							}
+						}
+						if(tempNodes2.item(cn).getNodeName().equals("LDM_Block_Sequential")){
+							attributes = tempNodes2.item(cn).getAttributes();
+							for(int a = 0; a < attributes.getLength(); a++) {
+								service.populateOriginalMetadata(meta, "LDM_Block_Sequential|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+							}
+						}
 					}
 					break;
+				}
+			}
+			
+			tempNodes = metaDoc.getElementsByTagName("*");
+			int sibblings;
+			int id;
+			Node sibbling;
+			if(extendedLogging)	progress.notifyMessage("Number of detected xml elements: " + tempNodes.getLength(), ProgressDialog.LOG);
+			screeningNodes: for(int n = 0; n < tempNodes.getLength(); n++){
+//				if(extendedLogging)	progress.notifyMessage(n + ": NameSpaceURI: " + tempNodes.item(n).getNamespaceURI(), ProgressDialog.LOG);
+//				if(extendedLogging)	progress.notifyMessage(n + ": Parent name: " + tempNodes.item(n).getParentNode().getNodeName(), ProgressDialog.LOG);
+//				if(extendedLogging)	progress.notifyMessage(n + ": Parent type: " + tempNodes.item(n).getParentNode().getNodeType(), ProgressDialog.LOG);
+//				if(extendedLogging)	progress.notifyMessage(n + ": Type: " + tempNodes.item(n).getNodeType(), ProgressDialog.LOG);
+//				if(extendedLogging)	progress.notifyMessage(n + ": Name: " + tempNodes.item(n).getNodeName(), ProgressDialog.LOG);
+//				if(extendedLogging)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
+
+				Node tempNode = tempNodes.item(n);
+				String tempXPath = "";
+				
+				//TODO number the nodes!
+				sibblings = 0;
+				for(int cn = 0; cn < tempNode.getParentNode().getChildNodes().getLength(); cn++) {
+					if(tempNode.getParentNode().getChildNodes().item(cn).getNodeName().equals(tempNode.getNodeName())) {
+						sibblings ++;
+					}
+				}
+				if(sibblings != 0) {
+					sibbling = tempNode;
+					id = 0;
+					for(int cn = 0; cn < sibblings; cn++) {
+						sibbling = sibbling.getNextSibling();
+						if(sibbling == null) {
+							break;
+						}
+						if(sibbling.getNodeName().equals(tempNode.getNodeName())) {
+							id++;
+						}
+					}
+					id = sibblings - id - 1;
+					tempXPath += tempNode.getNodeName() + id;
+				}else {
+					tempXPath += tempNode.getNodeName();					
+				}
+								
+				boolean valid = false;
+				while(!tempNode.equals(null)) {
+					tempNode = tempNode.getParentNode();
+					if(tempNode.getNodeName().equals("#document") || tempNode.equals(null)) {
+						break;
+					}else if(tempNode.getNodeName().equals("Image")){
+						if(tempXPath.startsWith("ImageDescription")) {
+							valid = true;							
+						}
+						break;
+					}else if(tempNode.getNodeName().equals("Attachment")) {
+						if(tempNode.getAttributes().getNamedItem("Name").getNodeValue().equals("HardwareSetting")) {
+							valid = true;							
+						}
+						break;
+					}					
+					tempXPath = tempNode.getNodeName() + "|" + tempXPath;
+				}
+				if(valid) {
+					if(extendedLogging)	progress.notifyMessage(n + ": XPATH: " + tempXPath, ProgressDialog.LOG);
+					if(extendedLogging)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
+					if(tempNodes.item(n).getNodeValue() != null) {
+						if(extendedLogging) progress.notifyMessage("ACCEPTED BECAUSE VALUE NOT NULL", ProgressDialog.LOG);						
+						service.populateOriginalMetadata(meta, tempXPath, tempNodes.item(n).getNodeValue());
+					}
+					if(tempNodes.item(n).hasAttributes()) {
+						attributes = tempNodes.item(n).getAttributes();
+						for(int a = 0; a < attributes.getLength(); a++) {
+							if(extendedLogging)	progress.notifyMessage(n + ": Found attribute: " + tempXPath + "|" + attributes.item(a).getNodeName() + ": " + attributes.item(a).getNodeValue(), ProgressDialog.LOG);
+							service.populateOriginalMetadata(meta, tempXPath + "|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+						}						
+					}					
+				}else {
+					if(extendedLogging)	progress.notifyMessage(n + ": Declined XPATH: " + tempXPath, ProgressDialog.LOG);					
 				}
 			}
 			
