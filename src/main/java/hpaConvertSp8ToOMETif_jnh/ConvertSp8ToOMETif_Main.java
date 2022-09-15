@@ -1888,13 +1888,13 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			
 			/**
-			 * Saving modified tiff comment TODO uncomment to save the converted comment 
+			 * Saving modified tiff comment
 			 * */
-//		    TiffSaver saver = new TiffSaver(file);
-//		    RandomAccessInputStream in = new RandomAccessInputStream(file);
-//		    saver.overwriteComment(in, comment);
-//		    in.close();
-//			progress.updateBarText("Saving " + file + " done!");
+		    TiffSaver saver = new TiffSaver(file);
+		    RandomAccessInputStream in = new RandomAccessInputStream(file);
+		    saver.overwriteComment(in, comment);
+		    in.close();
+			progress.updateBarText("Saving " + file + " done!");
 	}
 	
 }// end main class
