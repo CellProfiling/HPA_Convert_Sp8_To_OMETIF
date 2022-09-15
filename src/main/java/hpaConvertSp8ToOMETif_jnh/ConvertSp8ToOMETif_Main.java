@@ -138,7 +138,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		String dir[] = { "", "" };
 		String fullPath[] = { "", "" };
 
-		boolean loadLif = true;	//TODO make optional
+		boolean loadLif = false;	//TODO make optional
+		boolean extendOnly = true;
 		if (loadLif) {
 			OpenFilesDialog od = new OpenFilesDialog(false);
 			od.setLocation(0, 0);
@@ -174,7 +175,145 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //				IJ.log("name:" + name[task]);
 //				IJ.log("dir:" + dir[task]);
 			}
-		} else {
+		} else if(extendOnly){
+			// Loading a folder structure
+			
+			try {
+				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			} catch (Exception e) {
+			}
+
+			// Launch improved file selector for manually selecting directories
+			OpenFilesDialog od = new OpenFilesDialog(true);
+			od.setLocation(0, 0);
+			od.setVisible(true);
+
+			od.addWindowListener(new java.awt.event.WindowAdapter() {
+				public void windowClosing(WindowEvent winEvt) {
+					return;
+				}
+			});
+
+			// Waiting for od to be done
+			while (od.done == false) {
+				try {
+					Thread.currentThread().sleep(50);
+				} catch (Exception e) {
+				}
+			}
+
+			tasks = od.filesToOpen.size();
+			String tempFile;
+			boolean withMetaData = false;
+			LinkedList<String> allFiles = new LinkedList<String>();
+			for (int task = 0; task < tasks; task++) {
+				// Get all files in the folder
+				String[] fileList = od.filesToOpen.get(task).list();
+				ArrayList<String> folderFiles = new ArrayList<String>(fileList.length);
+
+				// Check for metadata folder
+				withMetaData = false;
+				for (int f = 0; f < fileList.length; f++) {
+					if (fileList[f].equals("MetaData")) {
+						withMetaData = true;
+						break;
+					}else if (fileList[f].equals("Metadata")) {
+						withMetaData = true;
+						break;
+					}
+				}
+				if (withMetaData == false) {
+					IJ.log(od.filesToOpen.get(task).getName() + " was skipped since missing MetaData folder");
+				}
+
+				// TODO Function to expand the directory > enter directories not called MetaData
+				// and explore if there are tifs and MetaData folders
+
+				// Extract the relevant filenames and avoid duplicates
+				scanningFilenames: for (int f = 0; f < fileList.length; f++) {
+					tempFile = fileList[f];
+					/**
+					 * Now, the script scans through all file names in the folder and verifies if
+					 * they are tif files and if so it checks whether they are named as the Sp8
+					 * usually does A standard image output by the tif export function from the Sp8
+					 * microscope looks like <Custom File Name>_z<##>_ch<##>, where z refers to the
+					 * z plane (e.g., z00 = first z plane) and c refers to the channel number (e.g.,
+					 * "c00" = first channel).
+					 */
+					if (fileList[f].endsWith(".tif") || fileList[f].endsWith(".TIF") || fileList[f].endsWith(".tiff")
+							|| fileList[f].endsWith(".TIFF")) {
+//						tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf(".tif"));
+						if (tempFile.contains("_z")) {	//raw tif output: _z, xlef data: --Z
+//							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("_z"));
+						} else if (tempFile.contains("--Z")) {
+//							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("--z"));
+						} else if (tempFile.contains("_ch")) {	//raw tif output: _ch, xlef data: --C
+//							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("_ch"));
+						} else if (tempFile.contains("--C")) {
+//							tempFile = tempFile.substring(0, tempFile.toLowerCase().lastIndexOf("--c"));
+						}else {
+							IJ.log("Wrong tif formats in folder! Some files were skipped");
+							continue scanningFilenames;
+						}
+
+						/**
+						 * Here it is checked whether an identically named file is already in the list
+						 * (otherwise would load each file again and again...
+						 */
+//						for (int ff = 0; ff < folderFiles.size(); ff++) {
+//							if (folderFiles.get(ff).equals(od.filesToOpen.get(task).getAbsolutePath()
+//									+ System.getProperty("file.separator") + tempFile)) {
+//								continue scanningFilenames;
+//							}
+//						}
+						folderFiles.add(od.filesToOpen.get(task).getAbsolutePath()
+								+ System.getProperty("file.separator") + tempFile);
+						IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
+					}
+				}
+
+				// Copy new files to all files list
+				for (int ff = 0; ff < folderFiles.size(); ff++) {
+					allFiles.add(folderFiles.get(ff));
+				}
+
+				folderFiles.trimToSize();
+				folderFiles = null;
+			}
+
+			// Generate arrays based on unique names
+			tasks = allFiles.size();
+			series = new String[tasks];
+			name = new String[tasks];
+			dir = new String[tasks];
+			fullPath = new String[tasks];
+			for (int task = 0; task < allFiles.size(); task++) {
+				tempFile = allFiles.get(task);
+				fullPath[task] = tempFile;
+				
+				//Getting series name
+				series[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
+				if (tempFile.contains("_z")) {	//raw tif output: _z, xlef data: --Z
+					series[task] = series[task].substring(0, series[task].toLowerCase().lastIndexOf("_z"));
+				} else if (tempFile.contains("--Z")) {
+					series[task] = series[task].substring(0, series[task].toLowerCase().lastIndexOf("--z"));
+				}
+				
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
+				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
+				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + name[task];
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
+				dir[task] = tempFile;
+
+				IJ.log("FULL PATH: " + fullPath[task]);
+				IJ.log("series:" + series[task]);
+				IJ.log("name:" + name[task]);
+				IJ.log("dir:" + dir[task]);
+			}
+			allFiles.clear();
+			allFiles = null;
+		}else{
 			// Loading a folder structure
 			
 			try {
@@ -349,9 +488,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					 * Convert folder structure into OME
 					 * */
 					try {
-						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task, true)) {
-							break running;
-						}						
+//						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task, true)) {
+//							break running;
+//						}	
+						
+						this.extendOMETiffCommentWithMetadataXML(fullPath[task], task, true, true);
+						
 					} catch (Exception e) {
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
@@ -1624,4 +1766,135 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 	}
 
+	void extendOMETiffCommentWithMetadataXML(String file, int task, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException, ServiceException, DependencyException {
+			// read comment
+			if(extendedLogging)	progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
+			
+			progress.updateBarText("Reading " + file + " ");
+			
+			/**
+			 * In the OME Tiff output from the 3D viewer it will generate a folder for each well and then put the multiple positions recorded there (e.g., R1, R2, R3, R4) 
+			 * These positions are also in the filenames (Example file name "R2_z00_ch0.ome.tif")
+			 * In the folder for each well there is also a "MetaData" folder with xml files. For each position (e.g., R2), there is:
+			 * 		R2.ome.xml
+			 * 		R2.ome_properties.xml
+			 * 		R2.ome_properties.xsl
+			 * We need to read R2.ome.xml and transfer the metadata from there
+			 * */
+			String positionName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
+			positionName = positionName.substring(0,positionName.indexOf("_z"));
+			String metadataFilePath = file.substring(0,file.lastIndexOf(System.getProperty("file.separator"))+1) 
+					+ "MetaData" + System.getProperty("file.separator") 
+					+ positionName + ".ome.xml";
+			
+			if(extendedLogging)	progress.notifyMessage("Series name: " + positionName + "", ProgressDialog.LOG);
+			if(extendedLogging)	progress.notifyMessage("Metadata file path: " + metadataFilePath + "", ProgressDialog.LOG);
+			
+			/**
+			 * Import the XML file and generate document to read from it
+			 */
+			Document metaDoc = null;
+			String metaDataXMLString = "";
+			File metaDataFile = new File(metadataFilePath);
+			{
+				try {
+					metaDataXMLString = this.readFileAsOneString(metaDataFile);
+				} catch (FileNotFoundException e1) {
+					String out = "";
+					for (int err = 0; err < e1.getStackTrace().length; err++) {
+						out += " \n " + e1.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed reading metadata file for " + file 
+							+ "\nError message: " + e1.getMessage()
+							+ "\nError localized message: " + e1.getLocalizedMessage()
+							+ "\nError cause: " + e1.getCause() 
+							+ "\nDetailed message:"
+							+ "\n" + out,
+							ProgressDialog.ERROR);
+					return;
+				}
+
+				try {
+					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+					DocumentBuilder db = dbf.newDocumentBuilder();
+					metaDoc = db.parse(metaDataFile);
+					metaDoc.getDocumentElement().normalize();
+				} catch (SAXException | IOException | ParserConfigurationException e) {
+					String out = "";
+					for (int err = 0; err < e.getStackTrace().length; err++) {
+						out += " \n " + e.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process metadata file " + metadataFilePath 
+							+ "\nError message: " + e.getMessage()
+							+ "\nError localized message: " + e.getLocalizedMessage()
+							+ "\nError cause: " + e.getCause() 
+							+ "\nDetailed message:"
+							+ "\n" + out,
+							ProgressDialog.ERROR);
+					return;
+				}
+
+//				NodeList nodeList = metaDoc.getElementsByTagName("ATLConfocalSettingDefinition");
+//				for (int n = 0; n < nodeList.getLength(); n++) {
+//					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Type: "
+//							+ nodeList.item(n).getNodeType(), ProgressDialog.LOG);
+//					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Name: "
+//							+ nodeList.item(n).getNodeName(), ProgressDialog.LOG);
+//					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Value: "
+//							+ nodeList.item(n).getNodeValue(), ProgressDialog.LOG);
+//					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " Content: "
+//							+ nodeList.item(n).getTextContent(), ProgressDialog.LOG);
+//					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Node " + (n + 1) + " NodeMap:",
+//							ProgressDialog.LOG);
+//					for (int i = 0; i < nodeList.item(n).getAttributes().getLength(); i++) {
+//						progress.notifyMessage("" + nodeList.item(n).getAttributes().item(i), ProgressDialog.LOG);
+//					}
+////					progress.notifyMessage("Task " + (task+1) + "/" + tasks + ": Node " + (n+1) + " Content: " + nodeList.item(n).getFeature("Name", ""), ProgressDialog.LOG);
+//				}
+			}
+			
+			/**
+			 * Open the tif file, extract the tif comment (= OME XML String) to modify it.
+			 * */
+			
+			String comment = new TiffParser(file).getComment();
+			// or if you already have the file open for random access, you can use:
+			// RandomAccessInputStream fin = new RandomAccessInputStream(f);
+			// TiffParser tiffParser = new TiffParser(fin);
+			// String comment = tiffParser.getComment();
+			// fin.close();
+			progress.updateBarText("Reading " + file + " done!");
+			// display comment, and prompt for changes
+			if(logWholeComments) {
+				progress.notifyMessage("Original comment:", ProgressDialog.LOG);
+				progress.notifyMessage(comment, ProgressDialog.LOG);
+				
+			}
+			
+			
+			/**
+			 * Generate a MetadatStore
+			 * */
+			ServiceFactory factory = new ServiceFactory();
+			OMEXMLService service = factory.getInstance(OMEXMLService.class);
+			IMetadata omexmlMeta = service.createOMEXMLMetadata(comment);
+						
+			comment = service.getOMEXML(omexmlMeta);
+			
+			if(logWholeComments) {
+				progress.notifyMessage("Comment after adjustments:", ProgressDialog.LOG);
+				progress.notifyMessage(comment, ProgressDialog.LOG);
+				
+			}
+			
+			/**
+			 * Saving modified tiff comment TODO uncomment to save the converted comment 
+			 * */
+//		    TiffSaver saver = new TiffSaver(file);
+//		    RandomAccessInputStream in = new RandomAccessInputStream(file);
+//		    saver.overwriteComment(in, comment);
+//		    in.close();
+//			progress.updateBarText("Saving " + file + " done!");
+	}
+	
 }// end main class
