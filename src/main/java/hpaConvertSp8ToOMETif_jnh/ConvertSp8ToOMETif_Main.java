@@ -1919,21 +1919,21 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						service.populateOriginalMetadata(meta, attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
 					}
 					
-					NodeList tempNodes2 = tempNodes.item(n).getChildNodes();
-					for(int cn = 0; cn < tempNodes2.getLength(); cn++) {
-						if(tempNodes2.item(cn).getNodeName().equals("ATLConfocalSettingDefinition")){
-							attributes = tempNodes2.item(cn).getAttributes();
-							for(int a = 0; a < attributes.getLength(); a++) {
-								service.populateOriginalMetadata(meta, "ATLConfocalSettingDefinition|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
-							}
-						}
-						if(tempNodes2.item(cn).getNodeName().equals("LDM_Block_Sequential")){
-							attributes = tempNodes2.item(cn).getAttributes();
-							for(int a = 0; a < attributes.getLength(); a++) {
-								service.populateOriginalMetadata(meta, "LDM_Block_Sequential|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
-							}
-						}
-					}
+//					NodeList tempNodes2 = tempNodes.item(n).getChildNodes();
+//					for(int cn = 0; cn < tempNodes2.getLength(); cn++) {
+//						if(tempNodes2.item(cn).getNodeName().equals("ATLConfocalSettingDefinition")){
+//							attributes = tempNodes2.item(cn).getAttributes();
+//							for(int a = 0; a < attributes.getLength(); a++) {
+//								service.populateOriginalMetadata(meta, "ATLConfocalSettingDefinition|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+//							}
+//						}
+//						if(tempNodes2.item(cn).getNodeName().equals("LDM_Block_Sequential")){
+//							attributes = tempNodes2.item(cn).getAttributes();
+//							for(int a = 0; a < attributes.getLength(); a++) {
+//								service.populateOriginalMetadata(meta, "LDM_Block_Sequential|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+//							}
+//						}
+//					}
 					break;
 				}
 			}
@@ -1952,32 +1952,32 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //				if(extendedLogging)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
 
 				Node tempNode = tempNodes.item(n);
-				String tempXPath = "";
+				String tempXPath = getNumberedNodeName(tempNode);
 				
 				//TODO number the nodes!
-				sibblings = 0;
-				for(int cn = 0; cn < tempNode.getParentNode().getChildNodes().getLength(); cn++) {
-					if(tempNode.getParentNode().getChildNodes().item(cn).getNodeName().equals(tempNode.getNodeName())) {
-						sibblings ++;
-					}
-				}
-				if(sibblings != 0) {
-					sibbling = tempNode;
-					id = 0;
-					for(int cn = 0; cn < sibblings; cn++) {
-						sibbling = sibbling.getNextSibling();
-						if(sibbling == null) {
-							break;
-						}
-						if(sibbling.getNodeName().equals(tempNode.getNodeName())) {
-							id++;
-						}
-					}
-					id = sibblings - id - 1;
-					tempXPath += tempNode.getNodeName() + id;
-				}else {
-					tempXPath += tempNode.getNodeName();					
-				}
+//				sibblings = 0;
+//				for(int cn = 0; cn < tempNode.getParentNode().getChildNodes().getLength(); cn++) {
+//					if(tempNode.getParentNode().getChildNodes().item(cn).getNodeName().equals(tempNode.getNodeName())) {
+//						sibblings ++;
+//					}
+//				}
+//				if(sibblings != 0) {
+//					sibbling = tempNode;
+//					id = 0;
+//					for(int cn = 0; cn < sibblings; cn++) {
+//						sibbling = sibbling.getNextSibling();
+//						if(sibbling == null) {
+//							break;
+//						}
+//						if(sibbling.getNodeName().equals(tempNode.getNodeName())) {
+//							id++;
+//						}
+//					}
+//					id = sibblings - id - 1;
+//					tempXPath += tempNode.getNodeName() + id;
+//				}else {
+//					tempXPath += tempNode.getNodeName();					
+//				}
 								
 				boolean valid = false;
 				while(!tempNode.equals(null)) {
@@ -1995,20 +1995,20 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						}
 						break;
 					}					
-					tempXPath = tempNode.getNodeName() + "|" + tempXPath;
+					tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
 				}
 				if(valid) {
 					if(extendedLogging)	progress.notifyMessage(n + ": XPATH: " + tempXPath, ProgressDialog.LOG);
 					if(extendedLogging)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
 					if(tempNodes.item(n).getNodeValue() != null) {
 						if(extendedLogging) progress.notifyMessage("ACCEPTED BECAUSE VALUE NOT NULL", ProgressDialog.LOG);						
-						service.populateOriginalMetadata(meta, tempXPath, tempNodes.item(n).getNodeValue());
+						service.populateOriginalMetadata(meta, positionName + " " + tempXPath, tempNodes.item(n).getNodeValue());
 					}
 					if(tempNodes.item(n).hasAttributes()) {
 						attributes = tempNodes.item(n).getAttributes();
 						for(int a = 0; a < attributes.getLength(); a++) {
 							if(extendedLogging)	progress.notifyMessage(n + ": Found attribute: " + tempXPath + "|" + attributes.item(a).getNodeName() + ": " + attributes.item(a).getNodeValue(), ProgressDialog.LOG);
-							service.populateOriginalMetadata(meta, tempXPath + "|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+							service.populateOriginalMetadata(meta, positionName + " " + tempXPath + "|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
 						}						
 					}					
 				}else {
@@ -2042,6 +2042,35 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //		    saver.overwriteComment(in, comment);
 //		    in.close();
 //			progress.updateBarText("Saving " + file + " done!");
+	}
+	
+	String getNumberedNodeName(Node tempNode) {
+		int sibblings = 0;
+		Node sibbling;
+		for(int cn = 0; cn < tempNode.getParentNode().getChildNodes().getLength(); cn++) {
+			if(tempNode.getParentNode().getChildNodes().item(cn).getNodeName().equals(tempNode.getNodeName())) {
+				sibblings ++;
+			}
+		}
+		
+		int id = 0;
+		if(sibblings > 1) {
+			sibbling = tempNode;
+			id = 0;
+			for(int cn = 0; cn < sibblings; cn++) {
+				sibbling = sibbling.getNextSibling();
+				if(sibbling == null) {
+					break;
+				}
+				if(sibbling.getNodeName().equals(tempNode.getNodeName())) {
+					id++;
+				}
+			}
+			id = sibblings - id - 1;
+			return tempNode.getNodeName() + " " + id;
+		}else {
+			return tempNode.getNodeName();					
+		}
 	}
 	
 }// end main class
