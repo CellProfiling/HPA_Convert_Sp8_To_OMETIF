@@ -53,6 +53,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 import org.apache.commons.io.IOUtils;
+import org.w3c.dom.DOMException;
 //W3C definitions for a DOM, DOM exceptions, entities, nodes
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -70,6 +71,7 @@ import loci.common.services.DependencyException;
 import loci.common.services.ServiceException;
 import loci.common.services.ServiceFactory;
 import loci.formats.FormatException;
+import loci.formats.FormatTools;
 import loci.formats.ImageReader;
 import loci.formats.MetadataTools;
 import loci.formats.in.MetadataOptions;
@@ -82,9 +84,14 @@ import loci.formats.services.OMEXMLService;
 import loci.formats.tiff.TiffParser;
 //import loci.formats.FormatException;
 import loci.formats.tiff.TiffSaver;
+import ome.units.quantity.Length;
+import ome.units.unit.Unit;
 import ome.xml.meta.MetadataConverter;
 import ome.xml.model.OME;
 import ome.xml.model.OMEModel;
+import ome.xml.model.enums.EnumerationException;
+import ome.xml.model.enums.Immersion;
+import ome.xml.model.enums.MicroscopeType;
 
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
@@ -494,16 +501,21 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //							break running;
 //						}	
 						
-						this.extendOMETiffCommentWithMetadataXML(fullPath[task], task, true, true);
+						this.extendOMETiffCommentWithMetadataXML(fullPath[task], task, true, true, false);
 						
-					} catch (Exception e) {
+					} catch (Exception e) {						
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
 							out += " \n " + e.getStackTrace()[err].toString();
 						}
 						progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process "
-								+ series[task] + " - Error " + e.getCause() + " - Detailed message:\n" + out,
-								ProgressDialog.ERROR);
+							+ series[task] + "!" 
+							+ "\nError message: " + e.getMessage()
+							+ "\nError localized message: " + e.getLocalizedMessage()
+							+ "\nError cause: " + e.getCause() 
+							+ "\nDetailed message:"
+							+ "\n" + out,
+							ProgressDialog.ERROR);
 						break running;
 					}					
 				}
@@ -1768,7 +1780,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 	}
 
-	void extendOMETiffCommentWithMetadataXML(String file, int task, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException, ServiceException, DependencyException {
+	void extendOMETiffCommentWithMetadataXML(String file, int task, boolean logWholeComments, boolean extendedLogging, boolean logOriginalMetadata) throws IOException, FormatException, ServiceException, DependencyException {
 			// read comment
 			if(extendedLogging)	progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
 			
@@ -1916,7 +1928,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					attachmentHardwareSettings = tempNodes.item(n);
 					attributes = tempNodes.item(n).getAttributes();
 					for(int a = 0; a < attributes.getLength(); a++) {
-						service.populateOriginalMetadata(meta, attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+						service.populateOriginalMetadata(meta, positionName + " " + "HardwareSetting|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
 					}
 					
 //					NodeList tempNodes2 = tempNodes.item(n).getChildNodes();
@@ -1939,11 +1951,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			
 			tempNodes = metaDoc.getElementsByTagName("*");
-			int sibblings;
-			int id;
-			Node sibbling;
-			if(extendedLogging)	progress.notifyMessage("Number of detected xml elements: " + tempNodes.getLength(), ProgressDialog.LOG);
-			screeningNodes: for(int n = 0; n < tempNodes.getLength(); n++){
+			if(logOriginalMetadata)	progress.notifyMessage("Number of detected xml elements: " + tempNodes.getLength(), ProgressDialog.LOG);
+			for(int n = 0; n < tempNodes.getLength(); n++){
 //				if(extendedLogging)	progress.notifyMessage(n + ": NameSpaceURI: " + tempNodes.item(n).getNamespaceURI(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Parent name: " + tempNodes.item(n).getParentNode().getNodeName(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Parent type: " + tempNodes.item(n).getParentNode().getNodeType(), ProgressDialog.LOG);
@@ -1973,28 +1982,145 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
 				}
 				if(valid) {
-					if(extendedLogging)	progress.notifyMessage(n + ": XPATH: " + tempXPath, ProgressDialog.LOG);
-					if(extendedLogging)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
+					if(logOriginalMetadata)	progress.notifyMessage(n + ": XPATH: " + tempXPath, ProgressDialog.LOG);
+					if(logOriginalMetadata)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
 					if(tempNodes.item(n).getNodeValue() != null) {
-						if(extendedLogging) progress.notifyMessage("ACCEPTED BECAUSE VALUE NOT NULL", ProgressDialog.LOG);						
+						if(logOriginalMetadata) progress.notifyMessage("ACCEPTED BECAUSE VALUE NOT NULL", ProgressDialog.LOG);						
 						service.populateOriginalMetadata(meta, positionName + " " + tempXPath, tempNodes.item(n).getNodeValue());
 					}
 					if(tempNodes.item(n).hasAttributes()) {
 						attributes = tempNodes.item(n).getAttributes();
 						for(int a = 0; a < attributes.getLength(); a++) {
-							if(extendedLogging)	progress.notifyMessage(n + ": Found attribute: " + tempXPath + "|" + attributes.item(a).getNodeName() + ": " + attributes.item(a).getNodeValue(), ProgressDialog.LOG);
+							if(logOriginalMetadata)	progress.notifyMessage(n + ": Found attribute: " + tempXPath + "|" + attributes.item(a).getNodeName() + ": " + attributes.item(a).getNodeValue(), ProgressDialog.LOG);
 							service.populateOriginalMetadata(meta, positionName + " " + tempXPath + "|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
 						}						
 					}					
 				}else {
-					if(extendedLogging)	progress.notifyMessage(n + ": Declined XPATH: " + tempXPath, ProgressDialog.LOG);					
+					if(logOriginalMetadata)	progress.notifyMessage(n + ": Declined XPATH: " + tempXPath, ProgressDialog.LOG);					
 				}
 			}
 			
+			
 			/**
-			 * Translate metadata
+			 * Generate instrument in metadata
+			 * */
+			meta.setInstrumentID("Instrument:0", 0);
+			
+			/**
+			 * Generate objective settings
+			 * */
+			Node tempNode;
+			{
+				meta.setMicroscopeType(MicroscopeType.INVERTED, 0);
+				
+				//Get objective ID from master Confocal Setting Definition
+				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
+				
+				meta.setObjectiveID("Objective", 0, 0);			
+				meta.setObjectiveModel(tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), 0, 0);
+				
+				if(extendedLogging)	progress.notifyMessage("Generating objective setting for : " + tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), ProgressDialog.LOG);
+				
+				meta.setObjectiveNominalMagnification(Double.parseDouble(tempNode.getAttributes().getNamedItem("Magnification").getNodeValue()), 0, 0);
+				meta.setObjectiveLensNA(Double.parseDouble(tempNode.getAttributes().getNamedItem("NumericalAperture").getNodeValue()), 0, 0);
+				try {
+					meta.setObjectiveImmersion(Immersion.fromString(tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(0,1).toUpperCase() 
+							+ tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(1).toLowerCase()), 0, 0);
+				} catch (Exception e) {
+					String out = "";
+					for (int err = 0; err < e.getStackTrace().length; err++) {
+						out += " \n " + e.getStackTrace()[err].toString();
+					}
+					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed to transfer Immersion setting!"
+							+ "\nError message: " + e.getMessage()
+							+ "\nError localized message: " + e.getLocalizedMessage()
+							+ "\nError cause: " + e.getCause() 
+							+ "\nDetailed message:"
+							+ "\n" + out,
+							ProgressDialog.ERROR);
+				}
+				meta.setObjectiveSettingsRefractiveIndex(Double.parseDouble(tempNode.getAttributes().getNamedItem("RefractionIndex").getNodeValue()), 0);				
+			}
+			
+			/**
+			 * Generate Laser settings
 			 * */
 			{
+				//Shuffle through all AOTFs and extract lasers
+				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
+				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
+				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
+				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"AotfList");
+				tempNodes = tempNode.getChildNodes();
+				
+				int addedLaser = 0;
+				Node laserNode;
+				for(int aotf = 0; aotf < tempNodes.getLength(); aotf++) {
+					tempNode = tempNodes.item(aotf);
+					for(int laser = 0; laser < tempNode.getChildNodes().getLength(); laser++) {
+						laserNode = tempNode.getChildNodes().item(laser);
+						if(!laserNode.getNodeName().equals("LaserLineSetting"))	continue;
+						if(extendedLogging)	progress.notifyMessage("Generating laser setting for : " 
+								+ laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue(), ProgressDialog.LOG);
+						meta.setLaserID("LightSource", 0, addedLaser);
+						meta.setLaserWavelength(FormatTools.getWavelength(Double.parseDouble(laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue())), 0, addedLaser);
+						addedLaser++;						
+					}
+				}
+
+				//Shuffle through the LaserArray and extract more laser information from there
+				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
+				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
+				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
+				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LaserArray");
+				tempNodes = tempNode.getChildNodes();
+				
+				if(extendedLogging)	progress.notifyMessage("Extending laser settings from Node" + tempNode.getNodeName(), ProgressDialog.LOG);
+				
+				for(int laser = 0; laser < tempNodes.getLength(); laser++) {
+					laserNode = tempNodes.item(laser);
+					if(extendedLogging)	progress.notifyMessage("Search laser " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue() 
+							+ " among " + meta.getLightSourceCount(0) + " light sources!", ProgressDialog.LOG);
+					
+					int laserID = getIDofLaserWithWavelength(meta,laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue(),0);
+					if(laserID == -1) {
+						progress.notifyMessage("Laser settings in xml are corrupted - could not retrieve laser model for " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.NOTIFICATION);
+					}else {
+						if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
+								+ laserID + "WL " + meta.getLaserWavelength(0, laserID)
+								+ ") with laser model: " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.LOG);
+						
+						meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);						
+					}					
+				}
+				
+				
+			}
+			
+			/**
+			 * Translate metadata - channel information
+			 * It is a sequential recording > we need to read the <LDM_Block_Sequential_List> node, which contains a <ATLConfocalSettingDefinition> for each sequential recording
+			 * */
+			{
+				tempNodes = metaDoc.getElementsByTagName("LDM_Block_Sequential_List");
+				tempNodes = tempNodes.item(0).getChildNodes();
+				for(int cn = 0; cn < tempNodes.getLength(); cn++) {
+					//Verify that these are named ATLConfocalSettingDefinition
+					if(tempNodes.item(cn).getNodeName() != "ATLConfocalSettingDefinition") {
+						progress.notifyMessage("LDM_Block_Sequential_List does not only contain ATLConfocalSettingDefinition - detected node with name " 
+								+ tempNodes.item(cn).getNodeName(), ProgressDialog.NOTIFICATION);	
+						continue;
+					}
+					
+					//Extract information and fill into channel
+					{
+						//get number of channels in this definition
+						
+						
+						//pinhole is stored as attribute "Pinhole" and "PinholeAiry"
+//						meta.setChannelPinholeSize(null, id, cn)
+					}
+				}
 				
 			}
 						
@@ -2019,7 +2145,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //			progress.updateBarText("Saving " + file + " done!");
 	}
 	
-	String getNumberedNodeName(Node tempNode) {
+	private String getNumberedNodeName(Node tempNode) {
 		int sibblings = 0;
 		Node sibbling;
 		for(int cn = 0; cn < tempNode.getParentNode().getChildNodes().getLength(); cn++) {
@@ -2046,6 +2172,24 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}else {
 			return tempNode.getNodeName();					
 		}
+	}
+	
+	private Node getFirstNodeWithName(NodeList nodes, String name) {
+		for(int n = 0; n < nodes.getLength(); n++) {
+			if(nodes.item(n).getNodeName().equals(name)) {
+				return nodes.item(n);
+			}
+		}
+		return null;
+	}
+	
+	int getIDofLaserWithWavelength(OMEXMLMetadata meta, String Wavelength, int instrument) {
+		for(int ls = 0; ls < meta.getLightSourceCount(instrument); ls++) {
+			if(meta.getLaserWavelength(instrument, ls).compareTo(FormatTools.getWavelength(Double.parseDouble(Wavelength)))) {
+				return ls;
+			}
+		}
+		return -1;
 	}
 	
 }// end main class
