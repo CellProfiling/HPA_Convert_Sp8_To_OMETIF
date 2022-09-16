@@ -84,11 +84,13 @@ import loci.formats.services.OMEXMLService;
 import loci.formats.tiff.TiffParser;
 //import loci.formats.FormatException;
 import loci.formats.tiff.TiffSaver;
+import ome.units.UNITS;
 import ome.units.quantity.Length;
 import ome.units.unit.Unit;
 import ome.xml.meta.MetadataConverter;
 import ome.xml.model.OME;
 import ome.xml.model.OMEModel;
+import ome.xml.model.enums.DetectorType;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.Immersion;
 import ome.xml.model.enums.MicroscopeType;
@@ -2005,6 +2007,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * Generate instrument in metadata
 			 * */
 			meta.setInstrumentID("Instrument:0", 0);
+			meta.setImageInstrumentRef("Instrument:0", 0);
 			
 			/**
 			 * Generate objective settings
@@ -2026,6 +2029,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				try {
 					meta.setObjectiveImmersion(Immersion.fromString(tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(0,1).toUpperCase() 
 							+ tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(1).toLowerCase()), 0, 0);
+				} catch (EnumerationException en) {
+					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Immersion setting could not be translated to OME xml. Thus immersion in OME xml was set to 'Other'.",
+							ProgressDialog.NOTIFICATION);
+					meta.setObjectiveImmersion(Immersion.OTHER, 0, 0);
 				} catch (Exception e) {
 					String out = "";
 					for (int err = 0; err < e.getStackTrace().length; err++) {
@@ -2042,15 +2049,15 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				meta.setObjectiveSettingsRefractiveIndex(Double.parseDouble(tempNode.getAttributes().getNamedItem("RefractionIndex").getNodeValue()), 0);				
 			}
 			
+			tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
+			tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
+			Node LDMMasterConfocalSetDef = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
 			/**
 			 * Generate Laser settings
 			 * */
 			{
 				//Shuffle through all AOTFs and extract lasers
-				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
-				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
-				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
-				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"AotfList");
+				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"AotfList");
 				tempNodes = tempNode.getChildNodes();
 				
 				int addedLaser = 0;
@@ -2062,17 +2069,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						if(!laserNode.getNodeName().equals("LaserLineSetting"))	continue;
 						if(extendedLogging)	progress.notifyMessage("Generating laser setting for : " 
 								+ laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue(), ProgressDialog.LOG);
-						meta.setLaserID("LightSource:"+laser, 0, addedLaser);
+						meta.setLaserID("LightSource:"+addedLaser, 0, addedLaser);
 						meta.setLaserWavelength(FormatTools.getWavelength(Double.parseDouble(laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue())), 0, addedLaser);
 						addedLaser++;						
 					}
 				}
 
 				//Shuffle through the LaserArray and extract more laser information from there
-				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
-				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
-				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
-				tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LaserArray");
+				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"LaserArray");
 				tempNodes = tempNode.getChildNodes();
 				
 				if(extendedLogging)	progress.notifyMessage("Extending laser settings from Node" + tempNode.getNodeName(), ProgressDialog.LOG);
@@ -2092,11 +2096,38 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						
 						meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);						
 					}					
-				}
-				
-				
+				}			
 			}
 			
+			/**
+			 * Generate Detector
+			 * */
+			{
+				//Shuffle through all AOTFs and extract lasers
+				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"DetectorList");
+				tempNodes = tempNode.getChildNodes();
+				
+				int addedDetector = 0;
+				Node detectorNode;
+				for(int det = 0; det < tempNodes.getLength(); det++) {
+					detectorNode = tempNodes.item(det);
+					if(!detectorNode.getNodeName().equals("Detector"))	continue;
+					
+					if(extendedLogging)	progress.notifyMessage("Generating detector setting for " 
+							+ detectorNode.getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
+					
+					meta.setDetectorID("Detector:"+addedDetector, 0, addedDetector);
+					meta.setDetectorModel(detectorNode.getAttributes().getNamedItem("Name").getNodeValue(), 0, addedDetector);
+					try{
+						meta.setDetectorType(DetectorType.fromString(detectorNode.getAttributes().getNamedItem("Type").getNodeValue()), 0, addedDetector);
+					}catch(EnumerationException e) {
+						meta.setDetectorType(DetectorType.OTHER, 0, addedDetector);
+					}
+					meta.setDetectorZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, addedDetector);
+					addedDetector++;
+				}
+			}
+						
 			/**
 			 * Translate metadata - channel information
 			 * It is a sequential recording > we need to read the <LDM_Block_Sequential_List> node, which contains a <ATLConfocalSettingDefinition> for each sequential recording
@@ -2104,22 +2135,63 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			{
 				tempNodes = metaDoc.getElementsByTagName("LDM_Block_Sequential_List");
 				tempNodes = tempNodes.item(0).getChildNodes();
+				int ldm = 0;
+				int channel = 0;
 				for(int cn = 0; cn < tempNodes.getLength(); cn++) {
+					Node DefNode = tempNodes.item(cn);
 					//Verify that these are named ATLConfocalSettingDefinition
-					if(tempNodes.item(cn).getNodeName() != "ATLConfocalSettingDefinition") {
+					if(DefNode.getNodeName() != "ATLConfocalSettingDefinition") {
 						progress.notifyMessage("LDM_Block_Sequential_List does not only contain ATLConfocalSettingDefinition - detected node with name " 
-								+ tempNodes.item(cn).getNodeName(), ProgressDialog.NOTIFICATION);	
+								+ DefNode.getNodeName(), ProgressDialog.NOTIFICATION);	
 						continue;
 					}
 					
-					//Extract information and fill into channel
-					{
-						//get number of channels in this definition
+					NodeList Detectors = getFirstNodeWithName(DefNode.getChildNodes(), "DetectorList").getChildNodes();
+					int detectNr = 0;
+					for(int d = 0; d < Detectors.getLength(); d++) {
+						if(Detectors.item(d).getNodeName() != "Detector") {
+							progress.notifyMessage("Problem: DetectorList contains elements other than Detector" 
+									+ Detectors.item(d).getNodeName(), ProgressDialog.NOTIFICATION);	
+							continue;
+						}
 						
-						
+						if(Detectors.item(d).getAttributes().getNamedItem("IsActive").getNodeValue().equals("1")) {
+							if(extendedLogging)	progress.notifyMessage("Generating channel setting " + channel 
+									+ " using detector " + Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
+
+							//Add Channel to pixels object and specify channel settings accordingly
+							meta.setChannelID("", 0, channel);
+							meta.setDetectorSettingsID("Detector:"+detectNr, 0, channel);
+							meta.setDetectorSettingsGain(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Gain").getNodeValue()), 0, channel);
+							meta.setDetectorSettingsOffset(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Offset").getNodeValue()), 0, channel);
+							meta.setDetectorSettingsReadOutRate(FormatTools.createFrequency(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("ScanSpeed").getNodeValue()), UNITS.HERTZ),0, channel);
+							meta.setDetectorSettingsZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, channel);
+							
+							if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()
+									+ " to " + Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
+							
+							meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);
+							meta.setObjectiveSettingsID("Objective:0", 0);
+							
+							//Extract the emission range from the Spectro Node > MultiBand settings and create a corresponding filter
+							meta.setFilterID("Filter:"+channel, 0, channel);
+							
+							
+							channel++;
+						}
+						detectNr++;
+					}
+					
+					
+					//Extract laser powers
+					getFirstNodeWithName(DefNode.getChildNodes(), "AotfList");
+					
+					
+					
 						//pinhole is stored as attribute "Pinhole" and "PinholeAiry"
 //						meta.setChannelPinholeSize(null, id, cn)
-					}
+					
+					ldm++;
 				}
 				
 			}
