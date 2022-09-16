@@ -2016,7 +2016,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				//Get objective ID from master Confocal Setting Definition
 				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
 				
-				meta.setObjectiveID("Objective", 0, 0);			
+				meta.setObjectiveID("Objective:0", 0, 0);			
 				meta.setObjectiveModel(tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), 0, 0);
 				
 				if(extendedLogging)	progress.notifyMessage("Generating objective setting for : " + tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), ProgressDialog.LOG);
@@ -2062,7 +2062,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						if(!laserNode.getNodeName().equals("LaserLineSetting"))	continue;
 						if(extendedLogging)	progress.notifyMessage("Generating laser setting for : " 
 								+ laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue(), ProgressDialog.LOG);
-						meta.setLaserID("LightSource", 0, addedLaser);
+						meta.setLaserID("LightSource:"+laser, 0, addedLaser);
 						meta.setLaserWavelength(FormatTools.getWavelength(Double.parseDouble(laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue())), 0, addedLaser);
 						addedLaser++;						
 					}
@@ -2087,7 +2087,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						progress.notifyMessage("Laser settings in xml are corrupted - could not retrieve laser model for " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.NOTIFICATION);
 					}else {
 						if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
-								+ laserID + "WL " + meta.getLaserWavelength(0, laserID)
+								+ laserID + "WL " + meta.getLaserWavelength(0, laserID).value().doubleValue()
 								+ ") with laser model: " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.LOG);
 						
 						meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);						
@@ -2185,7 +2185,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	
 	int getIDofLaserWithWavelength(OMEXMLMetadata meta, String Wavelength, int instrument) {
 		for(int ls = 0; ls < meta.getLightSourceCount(instrument); ls++) {
-			if(meta.getLaserWavelength(instrument, ls).compareTo(FormatTools.getWavelength(Double.parseDouble(Wavelength)))) {
+			if(meta.getLaserWavelength(instrument, ls).value().doubleValue() == FormatTools.getWavelength(Double.parseDouble(Wavelength)).value().doubleValue()) {
 				return ls;
 			}
 		}
