@@ -2127,6 +2127,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					addedDetector++;
 				}
 			}
+					
 						
 			/**
 			 * Translate metadata - channel information
@@ -2175,8 +2176,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							
 							//Extract the emission range from the Spectro Node > MultiBand settings and create a corresponding filter
 							meta.setFilterID("Filter:"+channel, 0, channel);
-							meta.setChannelFilterSetRef("Filter:"+channel, 0, channel);
-														
+							meta.setFilterModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
+							meta.setFilterSetID("FilterSet:"+channel, 0, channel);
+							meta.setFilterSetEmissionFilterRef("Filter:"+channel, 0, channel, channel);							
+							meta.setChannelFilterSetRef("FilterSet:"+channel, 0, channel);
+							
+							
 							NodeList Multibands = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro").getChildNodes();
 							for(int m = 0; m < Multibands.getLength(); m++) {
 								if(Multibands.item(m).getNodeName() != "MultiBand") {
@@ -2194,23 +2199,17 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								}
 							}							
 							channel++;
-						}
+						}						
 						detectNr++;
-					}
-					
-					
-					//Extract laser powers
-					getFirstNodeWithName(DefNode.getChildNodes(), "AotfList");
-					
-					
-					
-						//pinhole is stored as attribute "Pinhole" and "PinholeAiry"
-//						meta.setChannelPinholeSize(null, id, cn)
-					
+					}					
 					ldm++;
 				}
 				
 			}
+			
+			/**
+			 * Assign wavelengths to Channels
+			 * */
 						
 			/**
 			 * Retrieve new comment
