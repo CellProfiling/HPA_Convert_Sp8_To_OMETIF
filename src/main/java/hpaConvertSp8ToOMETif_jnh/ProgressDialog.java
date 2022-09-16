@@ -213,7 +213,7 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 //		}	
 	}
 	
-	public void moveTask(int i){		
+	public void moveTask(int i){
 		if(dataRight == null){
 			dataRight = new String [2];
 			dataRight [0] = "" + dataLeft[0];
@@ -247,9 +247,12 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 		}	
 		ListeLeft.setListData(dataLeft);
 		ListeRight.setListData(dataRight);
-		jScrollPaneLeft.updateUI();
-		jScrollPaneRight.updateUI();
-		bgPanel.updateUI();
+		try {
+			jScrollPaneLeft.updateUI();
+			jScrollPaneRight.updateUI();
+			bgPanel.updateUI();			
+		}catch(Exception e) {			
+		}
 		
 		if(task == tasks){
 			if(errorsAvailable){
@@ -293,8 +296,11 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			notifications [0] = message;
 		}
 		ListeBottom.setListData(notifications);
-		jScrollPaneBottom.updateUI();
-		bgPanel.updateUI();
+		try {
+			jScrollPaneBottom.updateUI();
+			bgPanel.updateUI();			
+		}catch(Exception e) {			
+		}
 	}
 	
 	public void addToBar(double addFractionOfTask){
@@ -303,7 +309,10 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			taskFraction = 0.9;
 		}
 		progressBar.setValue((int)Math.round(((double)(task-1)/tasks)*100.0+taskFraction*(100/tasks)));
-		bgPanel.updateUI();
+		try {
+			bgPanel.updateUI();			
+		}catch(Exception e) {			
+		}
 	}
 	
 	public void setBar(double fractionOfTask){
@@ -312,16 +321,25 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			taskFraction = 0.9;
 		}
 		progressBar.setValue((int)Math.round(((double)(task-1)/tasks)*100.0+taskFraction*(100/tasks)));
-		bgPanel.updateUI();
+		try {
+			bgPanel.updateUI();			
+		}catch(Exception e) {			
+		}
 	}
 	
 	public void updateBarText(String text){
 		progressBar.setString("Task " + task + "/" + tasks + ": " + text);
-		bgPanel.updateUI();
+		try {
+			bgPanel.updateUI();			
+		}catch(Exception e) {			
+		}
 	}
 	
 	public void replaceBarText(String text){			
 		progressBar.setString(text);
-		bgPanel.updateUI();
+		try {
+			bgPanel.updateUI();			
+		}catch(Exception e) {			
+		}
 	}
 }

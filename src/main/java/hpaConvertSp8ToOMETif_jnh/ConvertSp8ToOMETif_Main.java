@@ -1953,32 +1953,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 				Node tempNode = tempNodes.item(n);
 				String tempXPath = getNumberedNodeName(tempNode);
-				
-				//TODO number the nodes!
-//				sibblings = 0;
-//				for(int cn = 0; cn < tempNode.getParentNode().getChildNodes().getLength(); cn++) {
-//					if(tempNode.getParentNode().getChildNodes().item(cn).getNodeName().equals(tempNode.getNodeName())) {
-//						sibblings ++;
-//					}
-//				}
-//				if(sibblings != 0) {
-//					sibbling = tempNode;
-//					id = 0;
-//					for(int cn = 0; cn < sibblings; cn++) {
-//						sibbling = sibbling.getNextSibling();
-//						if(sibbling == null) {
-//							break;
-//						}
-//						if(sibbling.getNodeName().equals(tempNode.getNodeName())) {
-//							id++;
-//						}
-//					}
-//					id = sibblings - id - 1;
-//					tempXPath += tempNode.getNodeName() + id;
-//				}else {
-//					tempXPath += tempNode.getNodeName();					
-//				}
-								
+												
 				boolean valid = false;
 				while(!tempNode.equals(null)) {
 					tempNode = tempNode.getParentNode();
