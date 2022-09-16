@@ -2192,8 +2192,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 									meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
 									break;
 								}
-							}
-							
+							}							
 							channel++;
 						}
 						detectNr++;
