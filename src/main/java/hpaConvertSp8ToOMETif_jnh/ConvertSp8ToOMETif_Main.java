@@ -2150,7 +2150,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					int detectNr = 0;
 					for(int d = 0; d < Detectors.getLength(); d++) {
 						if(Detectors.item(d).getNodeName() != "Detector") {
-							progress.notifyMessage("Problem: DetectorList contains elements other than Detector" 
+							progress.notifyMessage("Problem: DetectorList for def " + cn + " contains elements other than Detector" 
 									+ Detectors.item(d).getNodeName(), ProgressDialog.NOTIFICATION);	
 							continue;
 						}
@@ -2175,7 +2175,24 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							
 							//Extract the emission range from the Spectro Node > MultiBand settings and create a corresponding filter
 							meta.setFilterID("Filter:"+channel, 0, channel);
-							
+							meta.setChannelFilterSetRef("Filter:"+channel, 0, channel);
+														
+							NodeList Multibands = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro").getChildNodes();
+							for(int m = 0; m < Multibands.getLength(); m++) {
+								if(Multibands.item(m).getNodeName() != "MultiBand") {
+									progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
+											+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);	
+									continue;
+								}
+								
+								if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
+									if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
+											+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ")", ProgressDialog.LOG);
+									meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
+									meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
+									break;
+								}
+							}
 							
 							channel++;
 						}
