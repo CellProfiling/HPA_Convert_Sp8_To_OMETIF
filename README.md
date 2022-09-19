@@ -1,5 +1,6 @@
 # HPA: Convert Sp8-Tif to OME-Tif
-FIJI plugin that can be used to convert the file formats from the Leica Sp8 LAS output tif files to OME-Tif files suitable for the HPA LIMS.
+FIJI plugin that allows to convert the ome.tif files exported from the 3D viewer in Leica's LASX (Microscope DMi8-Sp8) to OME-Tif files suitable for the HPA LIMS.
+See release notes for more informations.
 
 ## Copyright
 (c) 2022, Jan N. Hansen
