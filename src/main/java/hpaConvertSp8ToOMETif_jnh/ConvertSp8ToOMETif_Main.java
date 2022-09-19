@@ -94,6 +94,7 @@ import ome.xml.model.enums.DetectorType;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.Immersion;
 import ome.xml.model.enums.MicroscopeType;
+import ome.xml.model.primitives.PercentFraction;
 
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
@@ -2168,49 +2169,146 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							meta.setDetectorSettingsReadOutRate(FormatTools.createFrequency(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("ScanSpeed").getNodeValue()), UNITS.HERTZ),0, channel);
 							meta.setDetectorSettingsZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, channel);
 							
+							/**
+							 * Set Pinhole and objective settings
+							 * */
 							if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()
 									+ " to " + Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
 							
 							meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);
 							meta.setObjectiveSettingsID("Objective:0", 0);
 							
-							//Extract the emission range from the Spectro Node > MultiBand settings and create a corresponding filter
+							/**
+							 * Extract the detected (emission) wavelength range from the Spectro Node > MultiBand settings and create a corresponding filter
+							 * */
 							meta.setFilterID("Filter:"+channel, 0, channel);
 							meta.setFilterModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
 							meta.setFilterSetID("FilterSet:"+channel, 0, channel);
-							meta.setFilterSetEmissionFilterRef("Filter:"+channel, 0, channel, channel);							
+							meta.setFilterSetEmissionFilterRef("Filter:"+channel, 0, channel, channel);
+							meta.setFilterSetModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
 							meta.setChannelFilterSetRef("FilterSet:"+channel, 0, channel);
+					
+							if(!meta.getFilterModel(0,channel).equals("PMT Trans")) {
+								if(extendedLogging)	progress.notifyMessage("Setting up spectro band for " + channel 
+										+ " (Channel model: " + meta.getFilterModel(0,channel) + ")", ProgressDialog.LOG);
+								
+								NodeList Multibands = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro").getChildNodes();
+								for(int m = 0; m < Multibands.getLength(); m++) {
+									if(Multibands.item(m).getNodeName() != "MultiBand") {
+										progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
+												+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);	
+										continue;
+									}
+									
+									if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
+										if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
+												+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ")", ProgressDialog.LOG);
+										meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
+										meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
+										break;
+									}
+								}
+							}
+														
 							
-							
-							NodeList Multibands = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro").getChildNodes();
-							for(int m = 0; m < Multibands.getLength(); m++) {
-								if(Multibands.item(m).getNodeName() != "MultiBand") {
-									progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
-											+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);	
+							/**
+							 * Assign wavelengths to Channels from the AotfList > Aotf > LaserLineSetting nodes							 * 
+							 * */
+							NodeList Aotfs = getFirstNodeWithName(DefNode.getChildNodes(), "AotfList").getChildNodes();
+							double waveLength = -1.0;
+							double laserPower = 0.0;
+							for(int aotf = 0; aotf < Aotfs.getLength(); aotf++) {
+								if(Aotfs.item(aotf).getNodeName() != "Aotf") {
+									progress.notifyMessage("Problem: Aotf list for def " + cn + " contains elements other than Aotf" 
+											+ Aotfs.item(aotf).getNodeName(), ProgressDialog.NOTIFICATION);	
 									continue;
 								}
 								
-								if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
-									if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
-											+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ")", ProgressDialog.LOG);
-									meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
-									meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
-									break;
+								for(int las = 0; las < Aotfs.item(aotf).getChildNodes().getLength(); las++) {
+									if(Aotfs.item(aotf).getChildNodes().item(las).getNodeName() == "BeamRoute") {
+										continue;
+									}else if(Aotfs.item(aotf).getChildNodes().item(las).getNodeName() != "BeamRoute" 
+											&& Aotfs.item(aotf).getChildNodes().item(las).getNodeName() != "LaserLineSetting") {
+										progress.notifyMessage("Problem: Elements for def " + cn + ", aotf " + aotf + " contains elements other than LaserLineSetting or BeamRoute" 
+												+ Aotfs.item(aotf).getChildNodes().item(las).getNodeName(), ProgressDialog.NOTIFICATION);	
+										continue;
+									}
+									
+									// Check: is the laser active ("IntensityDev" > 0) - if not, ignore!
+									if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue()) > 0.0)) {
+										continue;
+									}
+																		
+									// For channels that are not PTM Trans: Is the wavelength lower than emission range (if emission range set)? If yes it is a potential wavelength to be used, if no do not consider
+									if(!meta.getFilterModel(0,channel).equals("PMT Trans")) {
+										if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
+												< meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue())) {
+											continue;
+										}
+									}									
+									
+									if(extendedLogging)	progress.notifyMessage("Found potential wavelength for channel " + channel 
+											+ " (wavelength " + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() 
+											+ ", power" + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue() + ")", ProgressDialog.LOG);
+									
+									//check if a waveLength has been already picked > if no, assign that wavelength, if yes assign only if the wavelength is higher 
+									//(highest wavelength is most likely the one relevant for the fluorophore)
+									if(waveLength==-1.0) {
+										waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
+										laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
+										if(extendedLogging)	progress.notifyMessage("Set wavelength for channel " + channel
+												+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+									}else if(!meta.getFilterModel(0,channel).equals("PMT Trans") && waveLength < Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue())){
+										waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
+										laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
+										if(extendedLogging)	progress.notifyMessage("Replace wavelength for channel " + channel 
+												+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+									}else {
+										if(extendedLogging)	progress.notifyMessage("Do not replace wavelength for channel " + channel 
+												+ " with wavelength " + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() 
+												+ " (power" + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue() + ")", ProgressDialog.LOG);
+									}									
+								}																
+							}
+							
+							if(waveLength==-1.0) {
+								progress.notifyMessage("Could not find / set a wavelength for channel " + channel + "!", ProgressDialog.NOTIFICATION);
+							}else {
+								if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + "(new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+								meta.setChannelExcitationWavelength(FormatTools.getWavelength(waveLength), 0, channel);								
+								for(int las = 0; las < meta.getLightSourceCount(0); las++) {
+									if(meta.getLaserWavelength(0, las).value().doubleValue() == waveLength) {										
+										meta.setChannelLightSourceSettingsID(meta.getLaserID(0, las), 0, channel);
+										meta.setChannelLightSourceSettingsAttenuation(new PercentFraction((float)(laserPower/100.0)), 0, channel);
+										break;										
+									}									
 								}
+								
 							}							
 							channel++;
 						}						
 						detectNr++;
 					}					
 					ldm++;
-				}
-				
+				}				
 			}
 			
 			/**
-			 * Assign wavelengths to Channels
+			 * Add Z positions
 			 * */
-						
+			double baseZPosition = 0.0;
+			int theZ;
+			double newZ = -1.0;
+			for(int p = 0; p < meta.getPlaneCount(0); p++) {
+				theZ = meta.getPlaneTheZ(0, p).getValue();				
+				newZ = baseZPosition + (double) theZ * meta.getPixelsPhysicalSizeZ(0).value().doubleValue();
+				meta.setPlanePositionZ(FormatTools.createLength(newZ,meta.getPixelsPhysicalSizeZ(0).unit()), 0, p);
+				
+				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") received z position " 
+						+ meta.getPlanePositionZ(0, p).value().doubleValue() + " " + meta.getPlanePositionZ(0, p).unit().getSymbol()
+						+ " (basal Z position " + baseZPosition + ", pixel Z Size " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue() + ")", ProgressDialog.LOG);
+			}
+			
 			/**
 			 * Retrieve new comment
 			 * */
