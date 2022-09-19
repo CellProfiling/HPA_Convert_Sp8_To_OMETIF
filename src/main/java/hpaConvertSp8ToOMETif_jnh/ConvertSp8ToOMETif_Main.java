@@ -52,6 +52,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.w3c.dom.DOMException;
 //W3C definitions for a DOM, DOM exceptions, entities, nodes
@@ -64,6 +65,7 @@ import org.xml.sax.SAXException;
 
 import ij.IJ;
 import ij.ImagePlus;
+import ij.gui.GenericDialog;
 import ij.gui.WaitForUserDialog;
 import ij.plugin.PlugIn;
 import loci.common.RandomAccessInputStream;
@@ -128,7 +130,16 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 	// -----------------define params for Dialog-----------------
 	int tasks = 1;
-
+	boolean logXMLProcessing = true;
+	boolean logDetectedOriginalMetadata = false;
+	boolean logWholeOMEXMLComments = false;
+	
+	boolean loadLif = false;	//TODO make optional when this method is implemented!
+	boolean extendOnly = true;
+	
+	String imageType [] = new String [] {"z-stack"};
+	String selectedImageType = imageType [0];
+	
 	String outPath = "E:" + System.getProperty("file.separator") + System.getProperty("file.separator") + "OME Out"
 			+ System.getProperty("file.separator");
 	// -----------------define params for Dialog-----------------
@@ -150,9 +161,59 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		String dir[] = { "", "" };
 		String fullPath[] = { "", "" };
 
-		boolean loadLif = false;	//TODO make optional
-		boolean extendOnly = true;
+		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		// --------------------------REQUEST USER-SETTINGS-----------------------------
+		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		
+		GenericDialog gd = new GenericDialog(PLUGINNAME + " - set parameters");	
+		//show Dialog-----------------------------------------------------------------
+		gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022 JN Hansen", SuperHeadingFont);	
+		
+
+		gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
+		
+		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images from 'TileScans' acquired with the Leica Sp8. TileScans here refers to automated acquisition of many", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("images on a multi-well plates, all stored in one file.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The input file system needs to be .ome.tif files exported via the 3D visualization integration in LASX (Export as OME-TIFF)", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("For each processed .ome.tif image, the plugin will look for a file in the same folder called MetaData/<imagename>.ome.xml", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("This file will be read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The files in the output directory can then directly be detected by LIMS.", InstructionsFont);	
+		gd.setInsets(20,0,0);	gd.addMessage("This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont);		
+					
+		gd.setInsets(15,0,0);	gd.addMessage("Processing Settings", SubHeadingFont);		
+		gd.setInsets(0,0,0);	gd.addChoice("Image type", imageType, selectedImageType);
+		gd.setInsets(20,0,0);	gd.addStringField("Filepath to output file", outPath);
+		gd.setInsets(0,0,0);	gd.addMessage("This path defines where outputfiles are stored.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("Make sure this path does not contain similarly named files - the program will overwrite identically named files!.", InstructionsFont);
+		
+		gd.setInsets(15,0,0);	gd.addMessage("Logging settings (troubleshooting options)", SubHeadingFont);		
+		gd.setInsets(0,0,0);	gd.addCheckbox("Log transfer metadata file (.ome.xml) > OME image metadata", logXMLProcessing);
+		gd.setInsets(5,0,0);	gd.addCheckbox("Log transfer of original metadata", logDetectedOriginalMetadata);
+		gd.setInsets(5,0,0);	gd.addCheckbox("Log the OME metadata XML before and after extending", logWholeOMEXMLComments);
+		
+		gd.setInsets(15,0,0);	gd.addMessage("Input files", SubHeadingFont);
+		gd.setInsets(0,0,0);	gd.addMessage("A dialog will be shown when you press OK that allows you to list folders to be processed.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed..", InstructionsFont);
+		
+		gd.showDialog();
+		//show Dialog-----------------------------------------------------------------
+
+		//read and process variables--------------------------------------------------	
+		selectedImageType = gd.getNextChoice();
+		logXMLProcessing = gd.getNextBoolean();
+		logDetectedOriginalMetadata = gd.getNextBoolean();
+		logWholeOMEXMLComments = gd.getNextBoolean();
+		//read and process variables--------------------------------------------------
+		if (gd.wasCanceled()) return;
+		
+		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		// -------------------------------LOAD FILES-----------------------------------
+		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		
 		if (loadLif) {
+			/*
+			 * Note: This mode is not functional and just a draft for now!
+			 * */
 			OpenFilesDialog od = new OpenFilesDialog(false);
 			od.setLocation(0, 0);
 			od.setVisible(true);
@@ -188,7 +249,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //				IJ.log("dir:" + dir[task]);
 			}
 		} else if(extendOnly){
-			// Loading a folder structure
+			/*
+			 * This is functional for now!
+			 * */
 			
 			try {
 				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -315,6 +378,15 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
 				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
 				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + name[task];
+				
+				if(tempFile.contains("TileScan")) {
+					tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
+					name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + " " + name[task];
+					
+					tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
+					name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + " " + name[task];					
+				}
+				
 				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
 				dir[task] = tempFile;
 
@@ -326,6 +398,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			allFiles.clear();
 			allFiles = null;
 		}else{
+			/**
+			 * Note: This mode (for xlef and normal tifs with Metadata in xml files) is not functional yet!
+			 * */
 			// Loading a folder structure
 			
 			try {
@@ -481,6 +556,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				progress.updateBarText("in progress...");
 
 				if(loadLif){
+					/**
+					 * TODO This does not work for now since the OME library has bugs in lif conversion!
+					 * */
 					// Conversion via OME - Note this is buggy for Leica Lif files still in the OME library and thus, does not work for now!
 					try {
 						convertToOMETif(dir[task] + "" + System.getProperty("file.separator") + name[task]);
@@ -495,14 +573,33 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								ProgressDialog.ERROR);
 						break running;
 					}
-				}else {
+				}else if(extendOnly){
 					/**
 					 * Convert folder structure into OME
 					 * */
 					try {
-						//Thid function works for now when putting .ome.tif made by Leica
-						this.extendOMETiffCommentWithMetadataXML(fullPath[task], task, true, true, false);
-						
+						extendOMETiffCommentWithMetadataXML(fullPath[task], name[task], task, logWholeOMEXMLComments, logXMLProcessing, logDetectedOriginalMetadata);						
+					} catch (Exception e) {						
+						String out = "";
+						for (int err = 0; err < e.getStackTrace().length; err++) {
+							out += " \n " + e.getStackTrace()[err].toString();
+						}
+						progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process " 
+								+ series[task] + "!" 
+								+ "\nError message: " + e.getMessage()
+								+ "\nError localized message: " + e.getLocalizedMessage()
+								+ "\nError cause: " + e.getCause() 
+								+ "\nDetailed message:"
+								+ "\n" + out,
+							ProgressDialog.ERROR);
+						break running;
+					}
+				}else {					
+					//TODO: method for xlef needs to be implemented
+					try {
+						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task, logXMLProcessing)) {
+//							break running;
+						}						
 					} catch (Exception e) {						
 						String out = "";
 						for (int err = 0; err < e.getStackTrace().length; err++) {
@@ -517,7 +614,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							+ "\n" + out,
 							ProgressDialog.ERROR);
 						break running;
-					}					
+					}
 				}
 
 				processingDone = true;
@@ -605,7 +702,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	}
 
 	/**
-	 * This function is still a draft and thus @deprecated
+	 * This function is still a draft and thus 
+	 * @deprecated
 	 * */
 	void convertToOMETif(String id) throws Exception {
 		ImageReader reader = new ImageReader();
@@ -742,7 +840,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	/**
 	 * Cleanup XML in OME TIF single image files generated from a Lif file
 	 * This code should remove all information related to series that are not in this image.
-	 * This function is still a draft and thus @deprecated
+	 * This function is still a draft and thus
+	 * @deprecated
 	 * */
 	void cleanUpOmeTifFromLifXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
@@ -1085,7 +1184,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	/**
 	 * Cleanup XML in OME TIF single image files generated from a Leica XLEF file
 	 * This code should remove all information related to series that are not in this image.
-	 * This is still a draft and thus @deprecated
+	 * This is still a draft and thus
+	 * @deprecated
 	 * */
 	void cleanUpOmeTifFromXlefXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
@@ -1426,7 +1526,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 	/**
 	 * This function is still a draft and requires more work
-	 * Thus it is @deprecated
+	 * Thus it is
+	 * @deprecated
 	 * */
 	boolean importingFromFolderStructureXLEF(String directory, String filename, String series, int task, boolean extendedLogging) {
 		/**
@@ -1786,7 +1887,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 	}
 
-	void extendOMETiffCommentWithMetadataXML(String file, int task, boolean logWholeComments, boolean extendedLogging, boolean logOriginalMetadata) throws IOException, FormatException, ServiceException, DependencyException {
+	void extendOMETiffCommentWithMetadataXML(String file, String name, int task, boolean logWholeComments, boolean extendedLogging, boolean logOriginalMetadata) throws IOException, FormatException, ServiceException, DependencyException {
 			// read comment
 			if(extendedLogging)	progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
 			
@@ -2395,10 +2496,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						&& meta.getPlaneTheC(0, p).getValue()==imageC
 						&& meta.getPlaneTheT(0, p).getValue()==imageT) {
 					meta.setImageDescription("ImageCoordinates: "
-						+ "x=" + meta.getPlanePositionX(0, p).value().doubleValue() + meta.getPlanePositionX(0, p).unit().getSymbol() + ", "
-						+ "y=" + meta.getPlanePositionY(0, p).value().doubleValue() + meta.getPlanePositionY(0, p).unit().getSymbol() + ", "
-						+ "z=" + meta.getPlanePositionZ(0, p).value().doubleValue() + meta.getPlanePositionZ(0, p).unit().getSymbol() + "; "
-						+ meta.getImageDescription(0), 0);
+							+ "x=" + meta.getPlanePositionX(0, p).value().doubleValue() + meta.getPlanePositionX(0, p).unit().getSymbol() + ", "
+							+ "y=" + meta.getPlanePositionY(0, p).value().doubleValue() + meta.getPlanePositionY(0, p).unit().getSymbol() + ", "
+							+ "z=" + meta.getPlanePositionZ(0, p).value().doubleValue() + meta.getPlanePositionZ(0, p).unit().getSymbol() + ";\n"
+							+ meta.getImageDescription(0)
+							+ ";\nThis OME Metadatafile was enriched based on the corresponding .ome.xml file with the help of the plugin " + PLUGINNAME + " (Version: " + PLUGINVERSION + ")",
+						0);
 				}
 			}
 			
@@ -2414,13 +2517,51 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			
 			/**
-			 * Saving modified tiff comment
+			 * Create folder and copy files there
+			 * name = well, e.g. B2 or filename and well, e.g. DIl1295 TileScan1 B2
+			 * positionName = image region in the well, e.g. R1			 * 
+			 * */		
+			// Get acquisition date
+			String dateString = meta.getImageAcquisitionDate(0).getValue();
+			dateString = dateString.replace("-", "");
+			dateString = dateString.replace(":", "");
+			dateString = dateString.replace(".", "_");
+			dateString = dateString.replace("T", "_");
+			
+			// Generate a new unique directory to save the images
+			String saveDir = name + " " + positionName + dateString;
+			File savingDirectory = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator"));
+			
+			if(new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator")).exists()) {				
+				if(extendedLogging)	progress.notifyMessage("Directory to save files already existed: " + savingDirectory.getAbsolutePath(), ProgressDialog.LOG);
+			}else {
+				if(extendedLogging)	progress.notifyMessage("Creating directory to save files: " + savingDirectory.getAbsolutePath(), ProgressDialog.LOG);
+				savingDirectory.mkdir();
+			}
+			
+			// Copy image and metadata (if not already there)
+			String saveName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
+			String savePath = outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + saveName; 
+			
+			FileUtils.copyFile(new File(file), new File(savePath));
+			
+			File newMetadataFile = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + "MetaData.ome.xml");
+			if(newMetadataFile.exists()) {
+				if(extendedLogging)	progress.notifyMessage("Metadata existed already (" + newMetadataFile.getAbsolutePath() + ")", ProgressDialog.LOG);
+			}else {
+				FileUtils.copyFile(metaDataFile, newMetadataFile);
+				if(extendedLogging)	progress.notifyMessage("Saved " + newMetadataFile.getAbsolutePath(), ProgressDialog.LOG);
+			}
+			
+			/**
+			 * Saving modified tiff comment into copied image
 			 * */
-//		    TiffSaver saver = new TiffSaver(file);
-//		    RandomAccessInputStream in = new RandomAccessInputStream(file);
-//		    saver.overwriteComment(in, comment);
-//		    in.close();
-//			progress.updateBarText("Saving " + file + " done!");
+		    TiffSaver saver = new TiffSaver(savePath);
+		    RandomAccessInputStream in = new RandomAccessInputStream(savePath);
+		    saver.overwriteComment(in, comment);
+		    in.close();
+			progress.updateBarText("Saving " + savePath + " done!");
+			if(extendedLogging)	progress.notifyMessage("Saved " + savePath, ProgressDialog.LOG);
 	}
 	
 	private String getNumberedNodeName(Node tempNode) {
