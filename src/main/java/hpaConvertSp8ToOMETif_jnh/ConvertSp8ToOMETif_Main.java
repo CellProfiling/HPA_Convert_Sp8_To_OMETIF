@@ -2529,7 +2529,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			dateString = dateString.replace("T", "_");
 			
 			// Generate a new unique directory to save the images
-			String saveDir = name + " " + positionName + dateString;
+			String saveDir = name + " " + positionName + "_" + dateString + "_Z" + imageZ;
 			File savingDirectory = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator"));
 			
 			if(new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator")).exists()) {				
