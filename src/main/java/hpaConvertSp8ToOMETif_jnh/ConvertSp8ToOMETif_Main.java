@@ -481,7 +481,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				progress.updateBarText("in progress...");
 
 				if(loadLif){
-					// Conversion via OME
+					// Conversion via OME - Note this is buggy for Leica Lif files still in the OME library and thus, does not work for now!
 					try {
 						convertToOMETif(dir[task] + "" + System.getProperty("file.separator") + name[task]);
 						
@@ -500,10 +500,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					 * Convert folder structure into OME
 					 * */
 					try {
-//						if(!importingFromFolderStructureXLEF(dir[task],name[task], series[task], task, true)) {
-//							break running;
-//						}	
-						
+						//Thid function works for now when putting .ome.tif made by Leica
 						this.extendOMETiffCommentWithMetadataXML(fullPath[task], task, true, true, false);
 						
 					} catch (Exception e) {						
@@ -607,6 +604,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		return collectedString;
 	}
 
+	/**
+	 * This function is still a draft and thus @deprecated
+	 * */
 	void convertToOMETif(String id) throws Exception {
 		ImageReader reader = new ImageReader();
 		OMETiffWriter writer = new OMETiffWriter();
@@ -742,6 +742,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	/**
 	 * Cleanup XML in OME TIF single image files generated from a Lif file
 	 * This code should remove all information related to series that are not in this image.
+	 * This function is still a draft and thus @deprecated
 	 * */
 	void cleanUpOmeTifFromLifXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
@@ -1084,6 +1085,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	/**
 	 * Cleanup XML in OME TIF single image files generated from a Leica XLEF file
 	 * This code should remove all information related to series that are not in this image.
+	 * This is still a draft and thus @deprecated
 	 * */
 	void cleanUpOmeTifFromXlefXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
 		// read comment
@@ -1424,6 +1426,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 	/**
 	 * This function is still a draft and requires more work
+	 * Thus it is @deprecated
 	 * */
 	boolean importingFromFolderStructureXLEF(String directory, String filename, String series, int task, boolean extendedLogging) {
 		/**
@@ -2274,7 +2277,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							if(waveLength==-1.0) {
 								progress.notifyMessage("Could not find / set a wavelength for channel " + channel + "!", ProgressDialog.NOTIFICATION);
 							}else {
-								if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + "(new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+								if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
 								meta.setChannelExcitationWavelength(FormatTools.getWavelength(waveLength), 0, channel);								
 								for(int las = 0; las < meta.getLightSourceCount(0); las++) {
 									if(meta.getLaserWavelength(0, las).value().doubleValue() == waveLength) {										
@@ -2304,7 +2307,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-galvo")) {
 						if(extendedLogging)	progress.notifyMessage("Fetching galvo z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
 								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
-						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+//						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+						//Note: This is not included in the baseZPosition but still checked and logged. It is obsolete in the base position since the begin/end position 
+						//log the stack position in the galvo and not this setting! Unclear where this value comes from						
 					}else if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-wide")) {
 						if(extendedLogging)	progress.notifyMessage("Fetching widefield z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
 								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
@@ -2330,17 +2335,23 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			int theZ;
 			double newZ = -1.0;
 			double xPos, yPos;
+			double zSteps = (endZ - beginZ) / (double)(meta.getPixelsSizeZ(0).getValue()-1.0);
+			if(extendedLogging) {
+				progress.notifyMessage("Determining z steps to be " + zSteps
+					+ " m (Pixel Z size in pixels object: " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0 + " m, matching? " 
+					+ (zSteps == meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0)+ ")", ProgressDialog.LOG);
+			}
 			for(int p = 0; p < meta.getPlaneCount(0); p++) {
 				/**
 				 * Calculate and write z position for each plane
 				 * */
-				theZ = meta.getPlaneTheZ(0, p).getValue();				
-				newZ = baseZPosition + (double) theZ * meta.getPixelsPhysicalSizeZ(0).value().doubleValue();
-				meta.setPlanePositionZ(FormatTools.createLength(newZ,meta.getPixelsPhysicalSizeZ(0).unit()), 0, p);
+				theZ = meta.getPlaneTheZ(0, p).getValue();		
+				newZ = baseZPosition + zSteps * (double) theZ;
+				meta.setPlanePositionZ(FormatTools.createLength(newZ,UNITS.METER), 0, p);
 				
 				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") received z position " 
 						+ meta.getPlanePositionZ(0, p).value().doubleValue() + " " + meta.getPlanePositionZ(0, p).unit().getSymbol()
-						+ " (basal Z position " + baseZPosition + ", pixel Z Size " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue() + ")", ProgressDialog.LOG);
+						+ " (basal Z position " + baseZPosition + ", Z pixel Size " + meta.getPixelsSizeZ(0).getValue() + ")", ProgressDialog.LOG);
 				
 				/**
 				 * Correct unit in X and Y positions
@@ -2355,8 +2366,40 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change y position from " 
 						+ meta.getPlanePositionY(0, p).value().doubleValue() + " " + meta.getPlanePositionY(0, p).unit().getSymbol()
 						+ " to " + FormatTools.createLength(yPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(yPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
-				meta.setPlanePositionY(FormatTools.createLength(yPos,UNITS.METER), 0, p);
-				
+				meta.setPlanePositionY(FormatTools.createLength(yPos,UNITS.METER), 0, p);				
+			}
+			
+			/**
+			 * Add as a manual annotation the X,Y,Z positions of the current image / plane
+			 * */
+			int imageZ = -1, imageC = -1, imageT = -1;
+			for(int tiffD = 0; tiffD < meta.getTiffDataCount(0); tiffD++) {
+				if(meta.getUUIDValue(0, tiffD).equals(meta.getUUID())) {
+					imageC = meta.getTiffDataFirstC(0, tiffD).getValue();
+					imageZ = meta.getTiffDataFirstZ(0, tiffD).getValue();
+					imageT = meta.getTiffDataFirstT(0, tiffD).getValue();
+										
+					meta.setImageDescription("Filename: '" + meta.getUUIDFileName(0, tiffD) + "'", 0);
+					
+					if(extendedLogging)	progress.notifyMessage("Found UUID " + meta.getUUID() + ": C" 
+							 + imageC + " Z" + imageZ + " T" + imageT + " File name " + meta.getUUIDFileName(0, tiffD), ProgressDialog.LOG);
+					break;
+				}
+			}
+			if(imageZ == -1) {
+				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": ERROR! The metadata does not contain any plane information for the UUID!",
+						ProgressDialog.NOTIFICATION);
+			}
+			for(int p = 0; p < meta.getPlaneCount(0); p++) {
+				if(meta.getPlaneTheZ(0, p).getValue()==imageZ
+						&& meta.getPlaneTheC(0, p).getValue()==imageC
+						&& meta.getPlaneTheT(0, p).getValue()==imageT) {
+					meta.setImageDescription("ImageCoordinates: "
+						+ "x=" + meta.getPlanePositionX(0, p).value().doubleValue() + meta.getPlanePositionX(0, p).unit().getSymbol() + ", "
+						+ "y=" + meta.getPlanePositionY(0, p).value().doubleValue() + meta.getPlanePositionY(0, p).unit().getSymbol() + ", "
+						+ "z=" + meta.getPlanePositionZ(0, p).value().doubleValue() + meta.getPlanePositionZ(0, p).unit().getSymbol() + "; "
+						+ meta.getImageDescription(0), 0);
+				}
 			}
 			
 			/**
