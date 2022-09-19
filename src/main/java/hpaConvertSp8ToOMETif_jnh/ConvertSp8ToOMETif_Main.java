@@ -2297,9 +2297,43 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * Add Z positions
 			 * */
 			double baseZPosition = 0.0;
+			//Extract base Z positions
+			{
+				NodeList zNodes = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(), "AdditionalZPositionList").getChildNodes();
+				for(int zN = 0; zN < zNodes.getLength(); zN++) {
+					if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-galvo")) {
+						if(extendedLogging)	progress.notifyMessage("Fetching galvo z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
+								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
+						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+					}else if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-wide")) {
+						if(extendedLogging)	progress.notifyMessage("Fetching widefield z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
+								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
+						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+					}else {
+						progress.notifyMessage("WARNING: There is an unknown z position node in AdditionalZPositionList of the Master ATLConfocalSettingDefinition ... (NodeName: " 
+								+ zNodes.item(zN).getNodeName() + ")", ProgressDialog.NOTIFICATION);
+					}
+				}
+			}
+			if(extendedLogging)	progress.notifyMessage("Basal z position determined to be ... " + baseZPosition, ProgressDialog.LOG);
+			
+			//Extract begin and end of stack Z positions
+			double beginZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue());
+			double endZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue());
+			if(extendedLogging) {
+				progress.notifyMessage("Fetching stack begin Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue()
+					+ " (Parsed to double: " + beginZ + ")", ProgressDialog.LOG);
+				progress.notifyMessage("Fetching stack end Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue()
+					+ " (Parsed to double: " + endZ + ")", ProgressDialog.LOG);
+			}
+			
 			int theZ;
 			double newZ = -1.0;
+			double xPos, yPos;
 			for(int p = 0; p < meta.getPlaneCount(0); p++) {
+				/**
+				 * Calculate and write z position for each plane
+				 * */
 				theZ = meta.getPlaneTheZ(0, p).getValue();				
 				newZ = baseZPosition + (double) theZ * meta.getPixelsPhysicalSizeZ(0).value().doubleValue();
 				meta.setPlanePositionZ(FormatTools.createLength(newZ,meta.getPixelsPhysicalSizeZ(0).unit()), 0, p);
@@ -2307,6 +2341,22 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") received z position " 
 						+ meta.getPlanePositionZ(0, p).value().doubleValue() + " " + meta.getPlanePositionZ(0, p).unit().getSymbol()
 						+ " (basal Z position " + baseZPosition + ", pixel Z Size " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue() + ")", ProgressDialog.LOG);
+				
+				/**
+				 * Correct unit in X and Y positions
+				 * */
+				xPos = meta.getPlanePositionX(0, p).value().doubleValue();
+				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change x position from " 
+						+ meta.getPlanePositionX(0, p).value().doubleValue() + " " + meta.getPlanePositionX(0, p).unit().getSymbol()
+						+ " to " + FormatTools.createLength(xPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(xPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
+				meta.setPlanePositionX(FormatTools.createLength(xPos,UNITS.METER), 0, p);
+
+				yPos = meta.getPlanePositionY(0, p).value().doubleValue();
+				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change y position from " 
+						+ meta.getPlanePositionY(0, p).value().doubleValue() + " " + meta.getPlanePositionY(0, p).unit().getSymbol()
+						+ " to " + FormatTools.createLength(yPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(yPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
+				meta.setPlanePositionY(FormatTools.createLength(yPos,UNITS.METER), 0, p);
+				
 			}
 			
 			/**
