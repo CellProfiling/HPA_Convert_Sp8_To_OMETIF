@@ -2540,7 +2540,20 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			
 			// Copy image and metadata (if not already there)
-			String saveName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
+//			String saveName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
+			String saveName = positionName + "";
+			if(imageZ >= 10) {
+				saveName += "_Z" + imageZ;
+			}else {
+				saveName += "_Z0" + imageZ;
+			}
+			if(imageC >= 10) {
+				saveName += "_C" + imageC;
+			}else {
+				saveName += "_C0" + imageC;
+			}
+			saveName += ".ome.tif";
+			
 			String savePath = outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + saveName; 
 			
 			FileUtils.copyFile(new File(file), new File(savePath));
