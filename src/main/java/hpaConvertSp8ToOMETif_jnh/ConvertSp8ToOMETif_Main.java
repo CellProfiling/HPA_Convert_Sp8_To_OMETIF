@@ -174,9 +174,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images from 'TileScans' acquired with the Leica Sp8. TileScans here refers to automated acquisition of many", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("images on a multi-well plates, all stored in one file.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("The input file system needs to be .ome.tif files exported via the 3D visualization integration in LASX (Export as OME-TIFF)", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("For each processed .ome.tif image, the plugin will look for a file in the same folder called MetaData/<imagename>.ome.xml", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("This file will be read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The input needs to be a folder containing a file system with .ome.tif files exported via the 3D visualization integration in LASX (Export as OME-TIFF)", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The plugin detects all .ome.tif images in the file system for which a corresponding metadata xml file is available.",InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The plugin will look for an xml file in a MetaData subfolder of the same folder as the .ome.tif file (MetaData/<regionname>.ome.xml).", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("This xml is then read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("The files in the output directory can then directly be detected by LIMS.", InstructionsFont);	
 		gd.setInsets(20,0,0);	gd.addMessage("This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont);		
 					
