@@ -30,7 +30,7 @@ import javax.swing.SwingConstants;
 import ij.gui.GenericDialog;
 
 public class OpenFilesDialog extends javax.swing.JFrame implements ActionListener {
-	LinkedList<File> filesToOpen = new LinkedList<File>();
+	public LinkedList<File> filesToOpen = new LinkedList<File>();
 	boolean done = false, dirsaved = false, acceptDirsOnly = false;
 	File saved;// = new File(getClass().getResource(".").getFile());
 	JMenuBar jMenuBar1;

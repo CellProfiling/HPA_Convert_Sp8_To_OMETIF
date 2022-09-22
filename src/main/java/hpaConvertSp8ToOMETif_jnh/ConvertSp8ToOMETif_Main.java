@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.2
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.3
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -101,7 +101,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.2";
+	static final String PLUGINVERSION = "0.0.3";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -276,8 +276,29 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				} catch (Exception e) {
 				}
 			}
-
+			
 			tasks = od.filesToOpen.size();
+			for (int task = 0; task < tasks; task++) {
+				String[] fileList = od.filesToOpen.get(task).list();
+//				IJ.log(od.filesToOpen.get(task).getName() + " has " + fileList.length + " subfiles/-folders!");
+				for (int f = 0; f < fileList.length; f++) {
+					if (fileList[f].equals("MetaData")) {
+						continue;
+					}
+					if (fileList[f].equals("Metadata")) {
+						continue;
+					}
+					File fi = new File(od.filesToOpen.get(task).getAbsolutePath() + System.getProperty("file.separator") + fileList[f]);
+					if(fi.isDirectory()) {
+						od.filesToOpen.add(fi);
+						tasks = od.filesToOpen.size();
+//						IJ.log(fi.getAbsolutePath() + " was added to folder list! (#tasks " + tasks + ")");
+					}else {
+//						IJ.log(fi.getAbsolutePath() + " is no directory, skipped!");
+					}
+				}
+			}
+			
 			String tempFile;
 			boolean withMetaData = false;
 			LinkedList<String> allFiles = new LinkedList<String>();
