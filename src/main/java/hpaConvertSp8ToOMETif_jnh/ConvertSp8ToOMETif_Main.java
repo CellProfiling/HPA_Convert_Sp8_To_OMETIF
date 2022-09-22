@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.1
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.2
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: September 19, 2022)
+* Date: June 23, 2022 (This Version: September 22, 2022)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -101,7 +101,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.1";
+	static final String PLUGINVERSION = "0.0.2";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -2038,6 +2038,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						service.populateOriginalMetadata(meta, positionName + " " + "HardwareSetting|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
 					}
 					
+					meta.setMicroscopeModel(tempNodes.item(n).getAttributes().getNamedItem("SystemTypeName").getNodeValue(), 0);
+					
 //					NodeList tempNodes2 = tempNodes.item(n).getChildNodes();
 //					for(int cn = 0; cn < tempNodes2.getLength(); cn++) {
 //						if(tempNodes2.item(cn).getNodeName().equals("ATLConfocalSettingDefinition")){
@@ -2114,10 +2116,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			meta.setInstrumentID("Instrument:0", 0);
 			meta.setImageInstrumentRef("Instrument:0", 0);
 			
+			Node tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
+			meta.setMicroscopeSerialNumber(tempNode.getAttributes().getNamedItem("SystemSerialNumber").getNodeValue(), 0);
+			
 			/**
 			 * Generate objective settings
 			 * */
-			Node tempNode;
 			{
 				meta.setMicroscopeType(MicroscopeType.INVERTED, 0);
 				
@@ -2151,7 +2155,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							+ "\n" + out,
 							ProgressDialog.ERROR);
 				}
-				meta.setObjectiveSettingsRefractiveIndex(Double.parseDouble(tempNode.getAttributes().getNamedItem("RefractionIndex").getNodeValue()), 0);				
+				meta.setObjectiveSettingsRefractiveIndex(Double.parseDouble(tempNode.getAttributes().getNamedItem("RefractionIndex").getNodeValue()), 0);
+				meta.setObjectiveSerialNumber(tempNode.getAttributes().getNamedItem("ObjectiveNumber").getNodeValue(), 0, 0);
 			}
 			
 			tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
@@ -2232,7 +2237,6 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					addedDetector++;
 				}
 			}
-					
 						
 			/**
 			 * Translate metadata - channel information
@@ -2266,7 +2270,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 									+ " using detector " + Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
 
 							//Add Channel to pixels object and specify channel settings accordingly
-							meta.setChannelID("", 0, channel);
+							meta.setChannelID("Channel:" + channel, 0, channel);
 							meta.setDetectorSettingsID("Detector:"+detectNr, 0, channel);
 							meta.setDetectorSettingsGain(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Gain").getNodeValue()), 0, channel);
 							meta.setDetectorSettingsOffset(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Offset").getNodeValue()), 0, channel);
