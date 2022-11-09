@@ -2553,7 +2553,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			try {
 				dateString = meta.getImageAcquisitionDate(0).getValue();
 			}catch(Exception e){
-				progress.notifyMessage("Task " + task + ": Error during fetching acquisition date/time for " + positionName + ", Z" + imageZ, ProgressDialog.NOTIFICATION);				
+				progress.notifyMessage("Task " + (1+task) + ": Error during fetching acquisition date/time for " + name + " " + positionName + ", Z" + imageZ, ProgressDialog.NOTIFICATION);				
 			}
 			dateString = dateString.replace("-", "");
 			dateString = dateString.replace(":", "");
