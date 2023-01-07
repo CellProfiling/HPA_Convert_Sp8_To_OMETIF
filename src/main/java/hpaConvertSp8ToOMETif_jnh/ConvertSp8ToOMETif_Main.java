@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.6
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.7
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -101,7 +101,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.6";
+	static final String PLUGINVERSION = "0.0.7";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -2334,7 +2334,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 									if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
 										if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
 												+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ", Left: "
-														+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right"
+														+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right: "
 																+ Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue() + ")", ProgressDialog.LOG);
 										meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
 										meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
@@ -2378,6 +2378,13 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 												< meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue())) {
 											continue;
 										}
+										if(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
+												>= meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue()) {
+											progress.notifyMessage("Potential problem: Excitation (" 
+													+ Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() + ") that is within emission range (" 
+													+ meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue() + " - "
+													+ meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue() + ") detected!", ProgressDialog.NOTIFICATION);
+										}
 									}									
 									
 									if(extendedLogging)	progress.notifyMessage("Found potential wavelength for channel " + channel 
@@ -2407,7 +2414,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							if(waveLength==-1.0) {
 								progress.notifyMessage("Could not find / set a wavelength for channel " + channel + "!", ProgressDialog.NOTIFICATION);
 							}else {
-								if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+								if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + " (new wavelength " + waveLength + ", power " + laserPower + ")", ProgressDialog.LOG);
 								meta.setChannelExcitationWavelength(FormatTools.getWavelength(waveLength), 0, channel);								
 								for(int las = 0; las < meta.getLightSourceCount(0); las++) {
 									if(meta.getLaserWavelength(0, las).value().doubleValue() == waveLength) {										
