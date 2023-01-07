@@ -11,7 +11,7 @@
  
  	<artifactId>HPA_Convert_Sp8_To_OMETIF_JNH</artifactId>
  	<groupId>JNH</groupId>
-    <version>0.0.5-SNAPSHOT</version>
+    <version>0.0.6-SNAPSHOT</version>
  
 <!-- Plugin Information -->
     <name>HPA_Convert_Sp8_To_OMETIF_JNH</name>

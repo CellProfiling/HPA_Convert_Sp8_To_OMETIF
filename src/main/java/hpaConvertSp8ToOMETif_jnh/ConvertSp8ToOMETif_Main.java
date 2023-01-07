@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.5
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.6
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: November 09, 2022)
+* Date: June 23, 2022 (This Version: January 07, 2023)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -101,7 +101,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.5";
+	static final String PLUGINVERSION = "0.0.6";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -2333,7 +2333,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 									
 									if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
 										if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
-												+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ")", ProgressDialog.LOG);
+												+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ", Left: "
+														+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right"
+																+ Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue() + ")", ProgressDialog.LOG);
 										meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
 										meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
 										break;
@@ -2370,10 +2372,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										continue;
 									}
 																		
-									// For channels that are not PTM Trans: Is the wavelength lower than emission range (if emission range set)? If yes it is a potential wavelength to be used, if no do not consider
+									// For channels that are not PTM Trans: Is the wavelength lower or in the emission range (if emission range set)? If yes it is a potential wavelength to be used, if no do not consider
 									if(!meta.getFilterModel(0,channel).equals("PMT Trans")) {
 										if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
-												< meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue())) {
+												< meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue())) {
 											continue;
 										}
 									}									
