@@ -646,6 +646,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				break running;
 			}
 			progress.moveTask(task);
+			System.gc();
 		}
 	}
 
@@ -2380,7 +2381,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										}
 										if(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
 												>= meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue()) {
-											progress.notifyMessage("Potential problem: Excitation (" 
+											progress.notifyMessage("Task" + (task+1) + "Potential problem: Excitation (" 
 													+ Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() + ") that is within emission range (" 
 													+ meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue() + " - "
 													+ meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue() + ") detected!", ProgressDialog.NOTIFICATION);
