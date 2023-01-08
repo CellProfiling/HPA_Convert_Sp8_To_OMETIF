@@ -321,7 +321,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					}
 				}
 				if (withMetaData == false) {
-					IJ.log(od.filesToOpen.get(task).getName() + " was skipped since missing MetaData folder");
+					if(logWholeOMEXMLComments || logXMLProcessing || logDetectedOriginalMetadata) {
+						IJ.log(od.filesToOpen.get(task).getName() + " was skipped since missing MetaData folder");						
+					}
 				}
 
 				// TODO Function to expand the directory > enter directories not called MetaData
