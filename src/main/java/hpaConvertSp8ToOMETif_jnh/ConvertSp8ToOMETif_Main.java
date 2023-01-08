@@ -130,7 +130,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 	// -----------------define params for Dialog-----------------
 	int tasks = 1;
-	boolean logXMLProcessing = true;
+	boolean logXMLProcessing = false;
 	boolean logDetectedOriginalMetadata = false;
 	boolean logWholeOMEXMLComments = false;
 	
