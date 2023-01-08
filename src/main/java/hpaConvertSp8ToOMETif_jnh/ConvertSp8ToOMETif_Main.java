@@ -167,7 +167,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		GenericDialog gd = new GenericDialog(PLUGINNAME + " - set parameters");	
 		//show Dialog-----------------------------------------------------------------
-		gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022 JN Hansen", SuperHeadingFont);	
+		gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2023 JN Hansen", SuperHeadingFont);	
 		
 
 		gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
@@ -2381,7 +2381,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										}
 										if(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
 												>= meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue()) {
-											progress.notifyMessage("Task" + (task+1) + "Potential problem: Excitation (" 
+											progress.notifyMessage("Task " + (task+1) + ": Potential problem! Excitation (" 
 													+ Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() + ") that is within emission range (" 
 													+ meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue() + " - "
 													+ meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue() + ") detected!", ProgressDialog.NOTIFICATION);
@@ -2423,8 +2423,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										meta.setChannelLightSourceSettingsAttenuation(new PercentFraction((float)(laserPower/100.0)), 0, channel);
 										break;										
 									}									
-								}
-								
+								}								
 							}							
 							channel++;
 						}						
