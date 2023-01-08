@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.7
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.8
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: January 07, 2023)
+* Date: June 23, 2022 (This Version: January 08, 2023)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -101,7 +101,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.7";
+	static final String PLUGINVERSION = "0.0.8";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -366,7 +366,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //						}
 						folderFiles.add(od.filesToOpen.get(task).getAbsolutePath()
 								+ System.getProperty("file.separator") + tempFile);
-						IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
+//						IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
 					}
 				}
 
@@ -413,10 +413,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
 				dir[task] = tempFile;
 
-				IJ.log("FULL PATH: " + fullPath[task]);
-				IJ.log("series:" + series[task]);
-				IJ.log("name:" + name[task]);
-				IJ.log("dir:" + dir[task]);
+//				IJ.log("FULL PATH: " + fullPath[task]);
+//				IJ.log("series:" + series[task]);
+//				IJ.log("name:" + name[task]);
+//				IJ.log("dir:" + dir[task]);
 			}
 			allFiles.clear();
 			allFiles = null;
