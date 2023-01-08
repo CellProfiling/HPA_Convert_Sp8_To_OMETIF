@@ -366,7 +366,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //						}
 						folderFiles.add(od.filesToOpen.get(task).getAbsolutePath()
 								+ System.getProperty("file.separator") + tempFile);
-//						IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
+						if(logWholeOMEXMLComments || logXMLProcessing || logDetectedOriginalMetadata) {
+							IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
+						}
 					}
 				}
 
@@ -413,10 +415,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
 				dir[task] = tempFile;
 
-//				IJ.log("FULL PATH: " + fullPath[task]);
-//				IJ.log("series:" + series[task]);
-//				IJ.log("name:" + name[task]);
-//				IJ.log("dir:" + dir[task]);
+				if(logWholeOMEXMLComments || logXMLProcessing || logDetectedOriginalMetadata) {
+					IJ.log("FULL PATH: " + fullPath[task]);
+					IJ.log("series:" + series[task]);
+					IJ.log("name:" + name[task]);
+					IJ.log("dir:" + dir[task]);	
+				}
 			}
 			allFiles.clear();
 			allFiles = null;
