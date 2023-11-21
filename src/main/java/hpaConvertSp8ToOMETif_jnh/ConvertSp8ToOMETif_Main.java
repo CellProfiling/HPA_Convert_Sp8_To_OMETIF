@@ -183,7 +183,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					
 		gd.setInsets(15,0,0);	gd.addMessage("Processing Settings", SubHeadingFont);		
 		gd.setInsets(0,0,0);	gd.addChoice("Image type", imageType, selectedImageType);
-		gd.setInsets(20,0,0);	gd.addStringField("Filepath to output file", outPath);
+		gd.setInsets(20,0,0);	gd.addStringField("Filepath to output file", outPath, 30);
 		gd.setInsets(0,0,0);	gd.addMessage("This path defines where outputfiles are stored.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("Make sure this path does not contain similarly named files - the program will overwrite identically named files!.", InstructionsFont);
 		
@@ -1945,25 +1945,25 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * Import the XML file and generate document to read from it
 			 */
 			Document metaDoc = null;
-			String metaDataXMLString = "";
+//			String metaDataXMLString = "";
 			File metaDataFile = new File(metadataFilePath);
 			{
-				try {
-					metaDataXMLString = this.readFileAsOneString(metaDataFile);
-				} catch (FileNotFoundException e1) {
-					String out = "";
-					for (int err = 0; err < e1.getStackTrace().length; err++) {
-						out += " \n " + e1.getStackTrace()[err].toString();
-					}
-					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed reading metadata file for " + file 
-							+ "\nError message: " + e1.getMessage()
-							+ "\nError localized message: " + e1.getLocalizedMessage()
-							+ "\nError cause: " + e1.getCause() 
-							+ "\nDetailed message:"
-							+ "\n" + out,
-							ProgressDialog.ERROR);
-					return;
-				}
+//				try {
+//					metaDataXMLString = this.readFileAsOneString(metaDataFile);
+//				} catch (FileNotFoundException e1) {
+//					String out = "";
+//					for (int err = 0; err < e1.getStackTrace().length; err++) {
+//						out += " \n " + e1.getStackTrace()[err].toString();
+//					}
+//					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed reading metadata file for " + file 
+//							+ "\nError message: " + e1.getMessage()
+//							+ "\nError localized message: " + e1.getLocalizedMessage()
+//							+ "\nError cause: " + e1.getCause() 
+//							+ "\nDetailed message:"
+//							+ "\n" + out,
+//							ProgressDialog.ERROR);
+//					return;
+//				}
 
 				try {
 					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -2452,7 +2452,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
 //						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
 						//Note: This is not included in the baseZPosition but still checked and logged. It is obsolete in the base position since the begin/end position 
-						//log the stack position in the galvo and not this setting! Unclear where this value comes from						
+						//log the stack position in the galvo and not this setting! Unclear where this value comes from				
+						//TODO add galvo position since relevant!!
 					}else if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-wide")) {
 						if(extendedLogging)	progress.notifyMessage("Fetching widefield z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
 								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
