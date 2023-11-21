@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.8
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.9
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: January 08, 2023)
+* Date: June 23, 2022 (This Version: November 20, 2023)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -101,7 +101,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.8";
+	static final String PLUGINVERSION = "0.0.9";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
