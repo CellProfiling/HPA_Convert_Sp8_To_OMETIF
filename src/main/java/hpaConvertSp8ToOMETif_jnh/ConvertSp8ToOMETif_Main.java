@@ -1,7 +1,9 @@
 package hpaConvertSp8ToOMETif_jnh;
 
+import java.awt.Color;
+
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.0.9
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.1.0
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +17,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: November 20, 2023)
+* Date: June 23, 2022 (This Version: September 2, 2024)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -101,7 +103,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.0.9";
+	static final String PLUGINVERSION = "0.1.0";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -167,23 +169,24 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		GenericDialog gd = new GenericDialog(PLUGINNAME + " - set parameters");	
 		//show Dialog-----------------------------------------------------------------
-		gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2023 JN Hansen", SuperHeadingFont);	
+		gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2024 JN Hansen", SuperHeadingFont);	
 		
-
 		gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
 		
-		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images from 'TileScans' acquired with the Leica Sp8. TileScans here refers to automated acquisition of many", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("images on a multi-well plates, all stored in one file.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("The input needs to be a folder containing a file system with .ome.tif files exported via the 3D visualization integration in LASX (Export as OME-TIFF)", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("The plugin detects all .ome.tif images in the file system for which a corresponding metadata xml file is available.",InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images exported from the LASX software of the Leica Sp8 at the Human Protein Atlas, SciLifeLab Sweden.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The type of recording is typically a multi-well multi-position recording through the Navigator in LASX and thus in a TileScan format.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("Manual recordings can also be processed but, in LASX, should be first restructured into a Collection", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("that looks like TileScan 1 > Row > Column > the image (stack), and then exported.", InstructionsFont);
+		gd.setInsets(5,0,0);	gd.addMessage("The input for this plugin needs to be a folder containing a file system with .ome.tif files exported via the 3D visualization integration in LASX", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("(Export as OME-TIFF). The plugin detects all .ome.tif images in the file system for which a corresponding metadata xml file is available.",InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("The plugin will look for an xml file in a MetaData subfolder of the same folder as the .ome.tif file (MetaData/<regionname>.ome.xml).", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("This xml is then read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("The files in the output directory can then directly be detected by LIMS.", InstructionsFont);	
-		gd.setInsets(20,0,0);	gd.addMessage("This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont);		
+		gd.setInsets(5,0,0);	gd.addMessage("NOTE: This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont, Color.MAGENTA);		
 					
 		gd.setInsets(15,0,0);	gd.addMessage("Processing Settings", SubHeadingFont);		
 		gd.setInsets(0,0,0);	gd.addChoice("Image type", imageType, selectedImageType);
-		gd.setInsets(20,0,0);	gd.addStringField("Filepath to output file", outPath, 30);
+		gd.setInsets(0,0,0);	gd.addStringField("Filepath to output file", outPath, 50);
 		gd.setInsets(0,0,0);	gd.addMessage("This path defines where outputfiles are stored.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("Make sure this path does not contain similarly named files - the program will overwrite identically named files!.", InstructionsFont);
 		
@@ -194,7 +197,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		gd.setInsets(15,0,0);	gd.addMessage("Input files", SubHeadingFont);
 		gd.setInsets(0,0,0);	gd.addMessage("A dialog will be shown when you press OK that allows you to list folders to be processed.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed..", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed.", InstructionsFont);
+		
+		gd.addHelp("https://github.com/hansenjn/HPA_Convert_Sp8_To_OMETIF/");
 		
 		gd.showDialog();
 		//show Dialog-----------------------------------------------------------------
@@ -326,7 +331,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					}
 				}
 
-				// TODO Function to expand the directory > enter directories not called MetaData
+				// Function to expand the directory > enter directories not called MetaData
 				// and explore if there are tifs and MetaData folders
 
 				// Extract the relevant filenames and avoid duplicates
@@ -478,7 +483,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					IJ.log(od.filesToOpen.get(task).getName() + " was skipped since missing MetaData folder");
 				}
 
-				// TODO Function to expand the directory > enter directories not called MetaData
+				// Function to expand the directory > enter directories not called MetaData
 				// and explore if there are tifs and MetaData folders
 
 				// Extract the relevant filenames and avoid duplicates
@@ -2029,31 +2034,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			ServiceFactory factory = new ServiceFactory();
 			OMEXMLService service = factory.getInstance(OMEXMLService.class);
 			OMEXMLMetadata meta = service.createOMEXMLMetadata(comment);
-			
-			/**
-			 * Verify that x and y position match
-			 * */
-			if(extendedLogging)	progress.notifyMessage("XML PosX: " + metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue(), ProgressDialog.LOG);
-			if(extendedLogging)	progress.notifyMessage("XML PosY: " + metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue(), ProgressDialog.LOG);
-			
-			Double xmlPosX = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue()); 
-			Double xmlPosY = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue()); 
-			
-			for(int i = 0; i < meta.getPlaneCount(0); i++){
-				if(xmlPosX != meta.getPlanePositionX(0, i).value().doubleValue()) {
-					if(extendedLogging)	progress.notifyMessage("OME PosX: " + meta.getPlanePositionX(0, i).value(), ProgressDialog.LOG);
-					if(extendedLogging)	progress.notifyMessage("OME PosY: " + meta.getPlanePositionY(0, i).value(), ProgressDialog.LOG);
-					progress.notifyMessage("XML did not match OME metadata x position! Skipped task " + task + "!", ProgressDialog.ERROR);
-					return;
-				}
-				if(xmlPosY != meta.getPlanePositionY(0, i).value().doubleValue()) {
-					if(extendedLogging)	progress.notifyMessage("OME PosX: " + meta.getPlanePositionX(0, i).value(), ProgressDialog.LOG);
-					if(extendedLogging)	progress.notifyMessage("OME PosY: " + meta.getPlanePositionY(0, i).value(), ProgressDialog.LOG);
-					progress.notifyMessage("XML did not match OME metadata y position! Skipped task " + task + "!", ProgressDialog.ERROR);
-					return;
-				}				
-			}
-			
+						
 			/**
 			 * Add original metadata
 			 * */
@@ -2139,6 +2120,65 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				}
 			}
 			
+
+			/**
+			 * Verify that x and y position match
+			 * This was modified for version v0.1.0 to ensure that files from manual recording can be read, fixing issue #2.
+			 * */			
+			Double xmlPosX, xmlPosY; 
+			try {			
+				xmlPosX = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue()); 
+				xmlPosY = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue()); 
+				
+				if(extendedLogging) {
+					progress.notifyMessage("XML PosX: " + xmlPosX, ProgressDialog.LOG);
+					progress.notifyMessage("XML PosY: " + xmlPosY, ProgressDialog.LOG);
+				}
+			}catch(NullPointerException e) {
+				// In this case it seems that the recording is from a manual and not a Tile Scan recording. 
+				// Thus we have to fetch the position from the ATLConfocalSettingsDefinition instead of from the Tile attributes
+				
+				Node tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
+				
+				xmlPosX = Double.parseDouble(tempNode.getAttributes().getNamedItem("StagePosX").getNodeValue()); 
+				xmlPosY = Double.parseDouble(tempNode.getAttributes().getNamedItem("StagePosY").getNodeValue());
+
+				if(extendedLogging) {
+					progress.notifyMessage("XML StagePosX: " + xmlPosX, ProgressDialog.LOG);
+					progress.notifyMessage("XML StagePosY: " + xmlPosY, ProgressDialog.LOG);
+				}				
+			}
+			
+					
+			for(int i = 0; i < meta.getPlaneCount(0); i++){
+				if(xmlPosX != meta.getPlanePositionX(0, i).value().doubleValue()) {
+					progress.notifyMessage("XML (" + xmlPosX + ") did not match OME metadata x position (" 
+							+ meta.getPlanePositionX(0, i).value() + " " + meta.getPlanePositionX(0, i).unit().getSymbol()
+							+ ")! Requires correction!",
+							ProgressDialog.NOTIFICATION);
+					
+					meta.setPlanePositionX(new Length(xmlPosX, UNITS.METER), 0, i);
+					
+					progress.notifyMessage("Have Resetted OME metadata to XML position! Checked set position: " 
+							+ meta.getPlanePositionX(0, i).value().doubleValue() 
+							+ " " + meta.getPlanePositionX(0, i).unit().getSymbol() + ".",
+							ProgressDialog.NOTIFICATION);
+//					return;
+				}
+				if(xmlPosY != meta.getPlanePositionY(0, i).value().doubleValue()) {
+					progress.notifyMessage("XML (" + xmlPosY + ") did not match OME metadata y position (" 
+							+ meta.getPlanePositionY(0, i).value() + " " + meta.getPlanePositionY(0, i).unit().getSymbol()
+							+ ")! Skipped task " + task + "!", ProgressDialog.NOTIFICATION);
+					
+					meta.setPlanePositionY(new Length(xmlPosY, UNITS.METER), 0, i);
+					
+					progress.notifyMessage("Have Resetted OME metadata to XML position! Checked set position: " 
+							+ meta.getPlanePositionY(0, i).value().doubleValue() 
+							+ " " + meta.getPlanePositionY(0, i).unit().getSymbol() + ".",
+							ProgressDialog.NOTIFICATION);
+//					return;
+				}				
+			}
 			
 			/**
 			 * Generate instrument in metadata
@@ -2606,7 +2646,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			
 			FileUtils.copyFile(new File(file), new File(savePath));
 			
-			File newMetadataFile = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + "MetaData.ome.xml");
+			/**
+			 * From version v0.1.0 on the path for the metadata xml was switched from 
+			 * ```new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + "MetaData.ome.xml")```
+			 * to the following one to make sure LIMS reads it and to fix github issue #1:
+			 */
+			File newMetadataFile = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") 
+										+ "metadata" + System.getProperty("file.separator") + "image.ome.xml");
+			
 			if(newMetadataFile.exists()) {
 				if(extendedLogging)	progress.notifyMessage("Metadata existed already (" + newMetadataFile.getAbsolutePath() + ")", ProgressDialog.LOG);
 			}else {
