@@ -2168,7 +2168,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				if(xmlPosY != meta.getPlanePositionY(0, i).value().doubleValue()) {
 					progress.notifyMessage("XML (" + xmlPosY + ") did not match OME metadata y position (" 
 							+ meta.getPlanePositionY(0, i).value() + " " + meta.getPlanePositionY(0, i).unit().getSymbol()
-							+ ")! Skipped task " + task + "!", ProgressDialog.NOTIFICATION);
+							+ ")! Requires correction!", ProgressDialog.NOTIFICATION);
 					
 					meta.setPlanePositionY(new Length(xmlPosY, UNITS.METER), 0, i);
 					
