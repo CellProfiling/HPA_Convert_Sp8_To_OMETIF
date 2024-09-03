@@ -199,7 +199,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		gd.setInsets(0,0,0);	gd.addMessage("A dialog will be shown when you press OK that allows you to list folders to be processed.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed.", InstructionsFont);
 		
-		gd.addHelp("https://github.com/hansenjn/HPA_Convert_Sp8_To_OMETIF/");
+		gd.addHelp("https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/");
 		
 		gd.showDialog();
 		//show Dialog-----------------------------------------------------------------
