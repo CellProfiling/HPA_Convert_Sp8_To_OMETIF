@@ -1,9 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
-import java.awt.Color;
-
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.1.0
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.2.0
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -17,20 +15,18 @@ import java.awt.Color;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: September 2, 2024)
+* Date: June 23, 2022 (This Version: March 6, 2025)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
 
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
@@ -55,11 +51,8 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.w3c.dom.DOMException;
 //W3C definitions for a DOM, DOM exceptions, entities, nodes
 import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -77,11 +70,7 @@ import loci.common.services.ServiceFactory;
 import loci.formats.FormatException;
 import loci.formats.FormatTools;
 import loci.formats.ImageReader;
-import loci.formats.MetadataTools;
-import loci.formats.in.MetadataOptions;
 import loci.formats.meta.IMetadata;
-import loci.formats.meta.MetadataRetrieve;
-import loci.formats.meta.MetadataStore;
 import loci.formats.ome.OMEXMLMetadata;
 import loci.formats.out.OMETiffWriter;
 import loci.formats.services.OMEXMLService;
@@ -90,10 +79,6 @@ import loci.formats.tiff.TiffParser;
 import loci.formats.tiff.TiffSaver;
 import ome.units.UNITS;
 import ome.units.quantity.Length;
-import ome.units.unit.Unit;
-import ome.xml.meta.MetadataConverter;
-import ome.xml.model.OME;
-import ome.xml.model.OMEModel;
 import ome.xml.model.enums.DetectorType;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.Immersion;
@@ -103,7 +88,7 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.1.0";
+	static final String PLUGINVERSION = "0.2.0";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -144,6 +129,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	
 	String outPath = "E:" + System.getProperty("file.separator") + System.getProperty("file.separator") + "OME Out"
 			+ System.getProperty("file.separator");
+//	String outPath = "/media/jan/Drive/OME_Out/"; //Linux path if codwork is done on linux
+	
 	// -----------------define params for Dialog-----------------
 
 	@Override
@@ -173,7 +160,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
 		
-		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images exported from the LASX software of the Leica Sp8 at the Human Protein Atlas, SciLifeLab Sweden.", InstructionsFont);
+		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images exported from the LASX software of the Leica Sp8 or Stellaris8 at the Human Protein Atlas, Sweden.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("The type of recording is typically a multi-well multi-position recording through the Navigator in LASX and thus in a TileScan format.", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("Manual recordings can also be processed but, in LASX, should be first restructured into a Collection", InstructionsFont);
 		gd.setInsets(0,0,0);	gd.addMessage("that looks like TileScan 1 > Row > Column > the image (stack), and then exported.", InstructionsFont);
@@ -650,12 +637,15 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						break running;
 					}
 				}
-
 				processingDone = true;
 				progress.updateBarText("finished!");
 				progress.setBar(1.0);
 				break running;
 			}
+
+//			//In debugging mode prompt wait here
+//			new WaitForUserDialog("check").show();
+			
 			progress.moveTask(task);
 			System.gc();
 		}
@@ -2071,8 +2061,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			
 			tempNodes = metaDoc.getElementsByTagName("*");
+									
 			if(logOriginalMetadata)	progress.notifyMessage("Number of detected xml elements: " + tempNodes.getLength(), ProgressDialog.LOG);
-			for(int n = 0; n < tempNodes.getLength(); n++){
+			for(int n = 0; n < tempNodes.getLength(); n++){				 
 //				if(extendedLogging)	progress.notifyMessage(n + ": NameSpaceURI: " + tempNodes.item(n).getNamespaceURI(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Parent name: " + tempNodes.item(n).getParentNode().getNodeName(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Parent type: " + tempNodes.item(n).getParentNode().getNodeType(), ProgressDialog.LOG);
@@ -2093,9 +2084,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							valid = true;							
 						}
 						break;
-					}else if(tempNode.getNodeName().equals("Attachment")) {
-						if(tempNode.getAttributes().getNamedItem("Name").getNodeValue().equals("HardwareSetting")) {
-							valid = true;							
+					}else if(tempNode.getNodeName().equals("Attachment")) {						
+						String [] tempAttributes = { "TileScanInfo", "ViewerScaling", "HardwareSetting"};
+						for (String attribute : tempAttributes) {
+						    if (tempNode.getAttributes().getNamedItem("Name").getNodeValue().equals(attribute)) {
+						    	valid = true;						    	
+						        tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
+						        break;
+						    }
 						}
 						break;
 					}					
@@ -2259,24 +2255,54 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"LaserArray");
 				tempNodes = tempNode.getChildNodes();
 				
-				if(extendedLogging)	progress.notifyMessage("Extending laser settings from Node" + tempNode.getNodeName(), ProgressDialog.LOG);
+				if(extendedLogging)	progress.notifyMessage("Extending laser settings from Node " + tempNode.getNodeName(), ProgressDialog.LOG);
 				
+				String unlinkedLSName = "";
 				for(int laser = 0; laser < tempNodes.getLength(); laser++) {
 					laserNode = tempNodes.item(laser);
 					if(extendedLogging)	progress.notifyMessage("Search laser " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue() 
 							+ " among " + meta.getLightSourceCount(0) + " light sources!", ProgressDialog.LOG);
 					
-					int laserID = getIDofLaserWithWavelength(meta,laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue(),0);
-					if(laserID == -1) {
-						progress.notifyMessage("Laser settings in xml are corrupted - could not retrieve laser model for " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.NOTIFICATION);
-					}else {
+					/*
+					 * Stellaris microscope has a WLL laser, when this one is loaded, the Wavelength in the Laser node is 0.
+					 * In this case the wavelength needs to be retrieved in a different way. Thus the name of that laser is saved for
+					 * adding it to all lasers missing a name later.
+					 */
+					if(laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue().equals("0")) {
+						if(unlinkedLSName.equals("")) {
+							unlinkedLSName = laserNode.getAttributes().getNamedItem("LaserName").getNodeValue();
+						}else {
+							progress.notifyMessage("Laser settings in xml contain multiple lasers with wavelength 0, there may be errors"
+									+ "in linking lasers and applied wavelength. Only the first LaserName ("
+									+ laserNode.getAttributes().getNamedItem("LaserName").getNodeValue()
+									+ ") is used for all laser settings missing a linked laser.",
+									ProgressDialog.NOTIFICATION);
+						}
+					}else {					
+						int laserID = getIDofLaserWithWavelength(meta,laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue(),0);
+						if(laserID == -1) {
+							progress.notifyMessage("Laser settings in xml are corrupted - could not retrieve laser model for " 
+									+ laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.NOTIFICATION);
+						}else {
+							if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
+									+ laserID + " (WL " + meta.getLaserWavelength(0, laserID).value().doubleValue()
+									+ ") with laser model: " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.LOG);
+							meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);
+						}
+					}				
+				}
+				
+				/*
+				 * Since in Stellaris microscopes the WLL laser is used in several channels, we now need to add the WLL to all other lines that have not received a line.
+				 */
+				for(int ls = 0; ls < meta.getLightSourceCount(0); ls++) {
+					if(meta.getLaserModel(0, ls) == null) {
+						meta.setLaserModel(unlinkedLSName, 0, ls);
 						if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
-								+ laserID + "WL " + meta.getLaserWavelength(0, laserID).value().doubleValue()
-								+ ") with laser model: " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.LOG);
-						
-						meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);						
-					}					
-				}			
+								+ ls + " (WL " + meta.getLaserWavelength(0, ls).value().doubleValue()
+								+ ") with laser model " + unlinkedLSName + " as this laser has no model linked yet.", ProgressDialog.LOG);
+					}
+				}
 			}
 			
 			/**
@@ -2307,10 +2333,11 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					addedDetector++;
 				}
 			}
-						
+			
 			/**
 			 * Translate metadata - channel information
-			 * It is a sequential recording > we need to read the <LDM_Block_Sequential_List> node, which contains a <ATLConfocalSettingDefinition> for each sequential recording
+			 * It is a sequential recording > we need to read the <LDM_Block_Sequential_List> node, 
+			 * which contains a <ATLConfocalSettingDefinition> for each sequential recording.
 			 * */
 			{
 				tempNodes = metaDoc.getElementsByTagName("LDM_Block_Sequential_List");
@@ -2346,17 +2373,29 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							meta.setDetectorSettingsOffset(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Offset").getNodeValue()), 0, channel);
 							meta.setDetectorSettingsReadOutRate(FormatTools.createFrequency(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("ScanSpeed").getNodeValue()), UNITS.HERTZ),0, channel);
 							meta.setDetectorSettingsZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, channel);
-							
-							/**
-							 * Set Pinhole and objective settings
-							 * */
-							if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()
-									+ " to " + Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
-							
-							meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);
 							meta.setObjectiveSettingsID("Objective:0", 0);
 							
 							/**
+							 * Fetch Pinhole
+							 * */
+							if (DefNode.getAttributes().getNamedItem("Pinhole") != null) {
+								if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()
+										+ " to " + Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
+								
+								meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);
+							}else if (LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole") != null){
+								// In this case we can try fetching it from the master node for all sequentials called  <LDM_Block_Sequential_Master>
+								// Note this is the case for Stellaris microscope Files
+								if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()
+										+ " to " + Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
+								meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);								
+							}else {
+								progress.notifyMessage("WARNING: Could not find a Pinhole size for Detector " + detectNr, ProgressDialog.NOTIFICATION);
+							}
+							
+							
+							/**
+							 * Setup the channel ranges and filter settings
 							 * Extract the detected (emission) wavelength range from the Spectro Node > MultiBand settings and create a corresponding filter
 							 * */
 							meta.setFilterID("Filter:"+channel, 0, channel);
@@ -2366,28 +2405,42 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 							meta.setFilterSetModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
 							meta.setChannelFilterSetRef("FilterSet:"+channel, 0, channel);
 					
-							if(!meta.getFilterModel(0,channel).equals("PMT Trans")) {
+							if(!meta.getFilterModel(0,channel).equals("PMT Trans")  // Called PMT Trans in Sp8 Microscope
+									&& !meta.getFilterModel(0,channel).equals("Trans PMT")) { //Called Trans PMT in Stellaris Microscope
 								if(extendedLogging)	progress.notifyMessage("Setting up spectro band for " + channel 
 										+ " (Channel model: " + meta.getFilterModel(0,channel) + ")", ProgressDialog.LOG);
 								
-								NodeList Multibands = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro").getChildNodes();
-								for(int m = 0; m < Multibands.getLength(); m++) {
-									if(Multibands.item(m).getNodeName() != "MultiBand") {
-										progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
-												+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);	
-										continue;
-									}
-									
-									if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
-										if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
-												+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ", Left: "
-														+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right: "
-																+ Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue() + ")", ProgressDialog.LOG);
-										meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
-										meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
-										break;
-									}
+								Node spectro = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro");
+								if(spectro == null) {
+									// Leica SP8: Find Spectro Node in individual Sequential settings as above.
+									// Since spectro still null must come from another microscope like Stellaris and
+									// spectro settings persistent across all sequential settings. Thus fetch it from master node.
+									spectro = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(), "Spectro");
 								}
+								
+								if(spectro != null) {									
+									NodeList Multibands = spectro.getChildNodes();
+									for(int m = 0; m < Multibands.getLength(); m++) {
+										if(Multibands.item(m).getNodeName() != "MultiBand") {
+											progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
+													+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);
+											continue;
+										}
+										
+										if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
+											if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
+													+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ", Left: "
+															+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right: "
+																	+ Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue() + ")", ProgressDialog.LOG);
+											meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
+											meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
+											break;
+										}
+									}
+								}else {
+									progress.notifyMessage("WARNING: Could not find out emmission ranges "
+											+ "since could not find spectro node in metadata (Detector: " + detectNr + ")", ProgressDialog.NOTIFICATION);
+								}						
 							}
 														
 							
@@ -2420,7 +2473,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 									}
 																		
 									// For channels that are not PTM Trans: Is the wavelength lower or in the emission range (if emission range set)? If yes it is a potential wavelength to be used, if no do not consider
-									if(!meta.getFilterModel(0,channel).equals("PMT Trans")) {
+									if(!meta.getFilterModel(0,channel).equals("PMT Trans") // Called PMT Trans in Sp8 Microscope
+												&& !meta.getFilterModel(0,channel).equals("Trans PMT")) { //Called Trans PMT in Stellaris Microscope
 										if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
 												< meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue())) {
 											continue;
@@ -2445,7 +2499,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
 										if(extendedLogging)	progress.notifyMessage("Set wavelength for channel " + channel
 												+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
-									}else if(!meta.getFilterModel(0,channel).equals("PMT Trans") && waveLength < Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue())){
+									}else if(!meta.getFilterModel(0,channel).equals("PMT Trans") // Called PMT Trans in Sp8 Microscope
+										&& !meta.getFilterModel(0,channel).equals("Trans PMT") //Called Trans PMT in Stellaris Microscope
+											&& waveLength < Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue())){
 										waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
 										laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
 										if(extendedLogging)	progress.notifyMessage("Replace wavelength for channel " + channel 
@@ -2712,7 +2768,11 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	
 	int getIDofLaserWithWavelength(OMEXMLMetadata meta, String Wavelength, int instrument) {
 		for(int ls = 0; ls < meta.getLightSourceCount(instrument); ls++) {
-			if(meta.getLaserWavelength(instrument, ls).value().doubleValue() == FormatTools.getWavelength(Double.parseDouble(Wavelength)).value().doubleValue()) {
+			if(Wavelength == "0") {
+				if(meta.getLaserWavelength(instrument, ls).value().doubleValue() == 0.0) {
+					return ls;
+				}
+			}else if(meta.getLaserWavelength(instrument, ls).value().doubleValue() == FormatTools.getWavelength(Double.parseDouble(Wavelength)).value().doubleValue()) {
 				return ls;
 			}
 		}
