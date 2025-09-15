@@ -112,4 +112,4 @@ On Mac OS, do not place the ImageJ / FIJI application into the *Applications* fo
    <img width="650" alt="image" src="https://github.com/user-attachments/assets/6f3867e0-4b9e-44ca-bd31-96ac68dc45e7" />
 </p>
 
-8. Copy the output folder to the folder from where LIMS imports files and rename it to the name that is required for LIMS import (```if<4-digit plate number>```)
+8. If processing was successful, you can proceed to LIMS upload: Copy the output folder to the folder from where LIMS imports files and rename it to the name that is required for LIMS import (```if<4-digit plate number>```)
