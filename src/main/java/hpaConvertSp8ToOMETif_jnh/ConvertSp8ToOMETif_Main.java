@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.2.0
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.2.1
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: March 6, 2025)
+* Date: June 23, 2022 (This Version: September 15, 2025)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -83,12 +83,13 @@ import ome.xml.model.enums.DetectorType;
 import ome.xml.model.enums.EnumerationException;
 import ome.xml.model.enums.Immersion;
 import ome.xml.model.enums.MicroscopeType;
+import ome.xml.model.primitives.NonNegativeInteger;
 import ome.xml.model.primitives.PercentFraction;
 
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.2.0";
+	static final String PLUGINVERSION = "0.2.1";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -154,51 +155,69 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		// --------------------------REQUEST USER-SETTINGS-----------------------------
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 		
-		GenericDialog gd = new GenericDialog(PLUGINNAME + " - set parameters");	
-		//show Dialog-----------------------------------------------------------------
-		gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2025 JN Hansen", SuperHeadingFont);	
-		
-		gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
-		
-		gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images exported from the LASX software of the Leica Sp8 or Stellaris8 at the Human Protein Atlas, Sweden.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("The type of recording is typically a multi-well multi-position recording through the Navigator in LASX and thus in a TileScan format.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("Manual recordings can also be processed but, in LASX, should be first restructured into a Collection", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("that looks like TileScan 1 > Row > Column > the image (stack), and then exported.", InstructionsFont);
-		gd.setInsets(5,0,0);	gd.addMessage("The input for this plugin needs to be a folder containing a file system with .ome.tif files exported via the 3D visualization integration in LASX", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("(Export as OME-TIFF). The plugin detects all .ome.tif images in the file system for which a corresponding metadata xml file is available.",InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("The plugin will look for an xml file in a MetaData subfolder of the same folder as the .ome.tif file (MetaData/<regionname>.ome.xml).", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("This xml is then read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("The files in the output directory can then directly be detected by LIMS.", InstructionsFont);	
-		gd.setInsets(5,0,0);	gd.addMessage("NOTE: This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont, Color.MAGENTA);		
-					
-		gd.setInsets(15,0,0);	gd.addMessage("Processing Settings", SubHeadingFont);		
-		gd.setInsets(0,0,0);	gd.addChoice("Image type", imageType, selectedImageType);
-		gd.setInsets(0,0,0);	gd.addStringField("Filepath to output file", outPath, 50);
-		gd.setInsets(0,0,0);	gd.addMessage("This path defines where outputfiles are stored.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("Make sure this path does not contain similarly named files - the program will overwrite identically named files!.", InstructionsFont);
-		
-		gd.setInsets(15,0,0);	gd.addMessage("Logging settings (troubleshooting options)", SubHeadingFont);		
-		gd.setInsets(0,0,0);	gd.addCheckbox("Log transfer metadata file (.ome.xml) > OME image metadata", logXMLProcessing);
-		gd.setInsets(5,0,0);	gd.addCheckbox("Log transfer of original metadata", logDetectedOriginalMetadata);
-		gd.setInsets(5,0,0);	gd.addCheckbox("Log the OME metadata XML before and after extending", logWholeOMEXMLComments);
-		
-		gd.setInsets(15,0,0);	gd.addMessage("Input files", SubHeadingFont);
-		gd.setInsets(0,0,0);	gd.addMessage("A dialog will be shown when you press OK that allows you to list folders to be processed.", InstructionsFont);
-		gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed.", InstructionsFont);
-		
-		gd.addHelp("https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/");
-		
-		gd.showDialog();
-		//show Dialog-----------------------------------------------------------------
+		GenericDialog gd;
+		while(true) {	// While loop keeps showing the dialog until a correct selection was created. 
+			gd = new GenericDialog(PLUGINNAME + " - set parameters");	
+			//show Dialog-----------------------------------------------------------------
+			gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2025 JN Hansen", SuperHeadingFont);	
+			
+			gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
+			
+			gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images exported from the LASX software of the Leica Sp8 or Stellaris8 at the Human Protein Atlas, Sweden.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("The type of recording is typically a multi-well multi-position recording through the Navigator in LASX and thus in a TileScan format.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("Manual recordings can also be processed but, in LASX, should be first restructured into a Collection", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("that looks like TileScan 1 > Row > Column > the image (stack), and then exported.", InstructionsFont);
+			gd.setInsets(5,0,0);	gd.addMessage("The input for this plugin needs to be a folder containing a file system with .ome.tif files exported via the 3D visualization integration in LASX", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("(Export as OME-TIFF). The plugin detects all .ome.tif images in the file system for which a corresponding metadata xml file is available.",InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("The plugin will look for an xml file in a MetaData subfolder of the same folder as the .ome.tif file (MetaData/<regionname>.ome.xml).", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("This xml is then read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("The files in the output directory can then directly be detected by LIMS.", InstructionsFont);	
+			gd.setInsets(5,0,0);	gd.addMessage("NOTE: This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont, Color.MAGENTA);		
+						
+			gd.setInsets(15,0,0);	gd.addMessage("Processing Settings", SubHeadingFont);		
+			gd.setInsets(0,0,0);	gd.addChoice("Image type", imageType, selectedImageType);
+			gd.setInsets(0,0,0);	gd.addStringField("Filepath to output file", outPath, 50);
+			gd.setInsets(0,0,0);	gd.addMessage("This path defines where outputfiles are stored.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("Make sure this path does not contain similarly named files - the program will overwrite identically named files!.", InstructionsFont);
+			
+			gd.setInsets(15,0,0);	gd.addMessage("Logging settings (troubleshooting options)", SubHeadingFont);		
+			gd.setInsets(0,0,0);	gd.addCheckbox("Log transfer metadata file (.ome.xml) > OME image metadata", logXMLProcessing);
+			gd.setInsets(5,0,0);	gd.addCheckbox("Log transfer of original metadata", logDetectedOriginalMetadata);
+			gd.setInsets(5,0,0);	gd.addCheckbox("Log the OME metadata XML before and after extending", logWholeOMEXMLComments);
+			
+			gd.setInsets(15,0,0);	gd.addMessage("Input files", SubHeadingFont);
+			gd.setInsets(0,0,0);	gd.addMessage("A dialog will be shown when you press OK that allows you to list folders to be processed.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed.", InstructionsFont);
+			
+			gd.addHelp("https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/");
+			
+			gd.showDialog();
+			//show Dialog-----------------------------------------------------------------
 
-		//read and process variables--------------------------------------------------	
-		selectedImageType = gd.getNextChoice();
-		outPath = gd.getNextString();
-		logXMLProcessing = gd.getNextBoolean();
-		logDetectedOriginalMetadata = gd.getNextBoolean();
-		logWholeOMEXMLComments = gd.getNextBoolean();
-		//read and process variables--------------------------------------------------
-		if (gd.wasCanceled()) return;
+			//read and process variables--------------------------------------------------	
+			selectedImageType = gd.getNextChoice();
+			outPath = gd.getNextString();
+			logXMLProcessing = gd.getNextBoolean();
+			logDetectedOriginalMetadata = gd.getNextBoolean();
+			logWholeOMEXMLComments = gd.getNextBoolean();
+			//read and process variables--------------------------------------------------
+			if (gd.wasCanceled()) return;
+			
+			// Check whether a target folder was selected that exists:
+			boolean leave = true;
+			if(!new File(outPath).exists()) {
+					leave = false;
+					new WaitForUserDialog("The specified output file path does not exist.\nValidate the path you put!\nMake sure to correct the path to an existing path or create the specified folder!\n\nSpecified path:\n"
+							+outPath).show();
+			}
+			
+			// Additional validation checks can be added here
+			
+			if(leave) {
+				break;
+			}
+		}
+		
 		
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 		// -------------------------------LOAD FILES-----------------------------------
@@ -207,6 +226,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		if (loadLif) {
 			/*
 			 * Note: This mode is not functional and just a draft for now!
+			 * TODO Develop function!
 			 * */
 			OpenFilesDialog od = new OpenFilesDialog(false);
 			od.setLocation(0, 0);
@@ -236,15 +256,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				series[task] = "";
 				name[task] = od.filesToOpen.get(task).getName();
 				dir[task] = od.filesToOpen.get(task).getParent();
-
-//				IJ.log("ORIGINAL: " + fullPath[task]);
-//				IJ.log("series:" + series[task]);
-//				IJ.log("name:" + name[task]);
-//				IJ.log("dir:" + dir[task]);
 			}
 		} else if(extendOnly){
 			/*
-			 * This is functional for now!
+			 * This is functional for now! It uses ome.tif files exported through Leica's 3D Manager as a template.
 			 * */
 			
 			try {
@@ -331,6 +346,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					 * microscope looks like <Custom File Name>_z<##>_ch<##>, where z refers to the
 					 * z plane (e.g., z00 = first z plane) and c refers to the channel number (e.g.,
 					 * "c00" = first channel).
+					 * 
+					 * For single planes it will be only <Custom File Name>_ch<##>
 					 */
 					if (fileList[f].endsWith(".tif") || fileList[f].endsWith(".TIF") || fileList[f].endsWith(".tiff")
 							|| fileList[f].endsWith(".TIFF")) {
@@ -421,6 +438,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}else{
 			/**
 			 * Note: This mode (for xlef and normal tifs with Metadata in xml files) is not functional yet!
+			 * TODO: Develop
 			 * */
 			// Loading a folder structure
 			
@@ -1928,7 +1946,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			 * We need to read R2.ome.xml and transfer the metadata from there
 			 * */
 			String positionName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
-			positionName = positionName.substring(0,positionName.indexOf("_z"));
+			if(positionName.contains("_z")) {
+				// z stack recording
+				positionName = positionName.substring(0,positionName.lastIndexOf("_z"));
+			}else {
+				// single plane recording
+				positionName = positionName.substring(0,positionName.lastIndexOf("_ch"));
+			}
+			
 			String metadataFilePath = file.substring(0,file.lastIndexOf(System.getProperty("file.separator"))+1) 
 					+ "MetaData" + System.getProperty("file.separator") 
 					+ positionName + ".ome.xml";
@@ -2546,10 +2571,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-galvo")) {
 						if(extendedLogging)	progress.notifyMessage("Fetching galvo z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
 								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
-//						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
-						//Note: This is not included in the baseZPosition but still checked and logged. It is obsolete in the base position since the begin/end position 
-						//log the stack position in the galvo and not this setting! Unclear where this value comes from				
-						//TODO add galvo position since relevant!!
+						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+						//This position is added in files from version v0.2.1 on, since it turned out that this actually matters
 					}else if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-wide")) {
 						if(extendedLogging)	progress.notifyMessage("Fetching widefield z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
 								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
@@ -2562,31 +2585,78 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			if(extendedLogging)	progress.notifyMessage("Basal z position determined to be ... " + baseZPosition, ProgressDialog.LOG);
 			
-			//Extract begin and end of stack Z positions
-			double beginZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue());
-			double endZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue());
-			if(extendedLogging) {
-				progress.notifyMessage("Fetching stack begin Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue()
-					+ " (Parsed to double: " + beginZ + ")", ProgressDialog.LOG);
-				progress.notifyMessage("Fetching stack end Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue()
-					+ " (Parsed to double: " + endZ + ")", ProgressDialog.LOG);
+			//Extract begin and end of stack Z positions to find z position in stack
+			double zSteps;
+			try {
+				double beginZ, endZ;
+				if(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin") == null) {
+					// Single plane image, we can set it to an arbitrary value
+					beginZ = 0;
+					endZ = 0.7;
+					zSteps = 0.7;
+					progress.notifyMessage("No stack image > Creating begin / end stack positions as " + beginZ + " and " + endZ, ProgressDialog.LOG);
+					
+				}else {			
+					// Z stacks: begin / end information is there and can be used later to determine z step size.
+					beginZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue());
+					endZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue());
+					
+					if(extendedLogging) {
+						progress.notifyMessage("Fetching stack begin Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue()
+							+ " (Parsed to double: " + beginZ + ")", ProgressDialog.LOG);
+						progress.notifyMessage("Fetching stack end Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue()
+							+ " (Parsed to double: " + endZ + ")", ProgressDialog.LOG);
+					}
+
+					zSteps = (endZ - beginZ) / (double)(meta.getPixelsSizeZ(0).getValue()-1.0); //Calculating the Z step size from begin / end of stack
+					
+					if(extendedLogging) {
+						progress.notifyMessage("Determining z steps to be " + zSteps
+							+ " m (Pixel Z size in pixels object: " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0 + " m, matching? " 
+							+ (zSteps == meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0)+ ")", ProgressDialog.LOG);
+					}
+				}				
+			}catch(Exception e) {
+				String out = "";
+				for (int err = 0; err < e.getStackTrace().length; err++) {
+					out += " \n " + e.getStackTrace()[err].toString();
+				}
+				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": "
+						+ "Failed to detect begin / end of stack = number of z-steps!"
+						+ "\nError message: " + e.getMessage()
+						+ "\nError localized message: " + e.getLocalizedMessage()
+						+ "\nError cause: " + e.getCause() 
+						+ "\nDetailed message:"
+						+ "\n" + out,
+					ProgressDialog.ERROR);
+				return;
 			}
-			
+
 			int theZ;
 			double newZ = -1.0;
 			double xPos, yPos;
-			double zSteps = (endZ - beginZ) / (double)(meta.getPixelsSizeZ(0).getValue()-1.0);
-			if(extendedLogging) {
-				progress.notifyMessage("Determining z steps to be " + zSteps
-					+ " m (Pixel Z size in pixels object: " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0 + " m, matching? " 
-					+ (zSteps == meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0)+ ")", ProgressDialog.LOG);
-			}
 			for(int p = 0; p < meta.getPlaneCount(0); p++) {
 				/**
 				 * Calculate and write z position for each plane
 				 * */
-				theZ = meta.getPlaneTheZ(0, p).getValue();		
-				newZ = baseZPosition + zSteps * (double) theZ;
+				NonNegativeInteger theZObj = meta.getPlaneTheZ(0, p);
+				if (theZObj == null) {
+					/**
+					 * Calculate the z position through retrieving information from:
+					  	<AdditionalZPositionList>
+							<AdditionalZPosition Valid="1" SuperZMode="1" SuperZModeName="RestrictedRange" ZMode="1" ZUseModeName="z-galvo" ZPosition="-2.3841880645312E-10"/>
+							<AdditionalZPosition Valid="1" SuperZMode="1" SuperZModeName="RestrictedRange" ZMode="2" ZUseModeName="z-wide" ZPosition="0.002765538685"/>
+						</AdditionalZPositionList>
+						nested under the LDMMasterConfocalSetDef node. This is done above and returned as baseZPosition.
+						There seems to be no different z plane thus we just consider theZ to be 0.
+					 */
+					theZ = 0;
+					newZ = baseZPosition;
+				} else {
+				    theZ = theZObj.getValue();
+					newZ = baseZPosition + zSteps * (double) theZ;
+				}
+				
 				meta.setPlanePositionZ(FormatTools.createLength(newZ,UNITS.METER), 0, p);
 				
 				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") received z position " 
