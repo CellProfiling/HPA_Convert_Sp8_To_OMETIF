@@ -105,8 +105,15 @@ On Mac OS, do not place the ImageJ / FIJI application into the *Applications* fo
    3. The only problem is if ERRORS appear, which will let the bar turn red at the end of the processing and the message says: "Could not process" - see under point 7. 
 
 7. When the processing is done, the bar should turn green. If it is not green but red, you might have had processing errors.
-   1. Example for successful processing: GREEN BAR!
-   2. Example for not-successfully processed images: The bar has turned red at the end of the processing and the message says: "Could not process" for certain files. If you cannot source the problem back to a wrong setting or export from Leica LASX, please submit an issue as follows: Click on the messages, press Control+A or Cmd+A to mark all messages, press Control+C or Cmd+C to copy all of the messages, submit with a notification explaining the issue to be submitted [here](https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/issues) to ask for feedback from the developer. Make sure to answer follow up questions from the developer.
+   1. Example for successful processing: GREEN or ORANGE bar. The orange bar just indicates that there are some notifications. You can review those - they might be as specified in 6.i. and unless they are concering, all is good.
+
+<p align="center">
+   <img width="650" alt="image" src="https://github.com/user-attachments/assets/2994957f-184b-46bb-a34b-7962f5a2675e" />
+</p>
+
+
+
+   3. Example for not-successfully processed images: The bar has turned red at the end of the processing and the message says: "Could not process" for certain files. If you cannot source the problem back to a wrong setting or export from Leica LASX, please submit an issue as follows: Click on the messages, press Control+A or Cmd+A to mark all messages, press Control+C or Cmd+C to copy all of the messages, submit with a notification explaining the issue to be submitted [here](https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/issues) to ask for feedback from the developer. Make sure to answer follow up questions from the developer.
 
 <p align="center">
    <img width="650" alt="image" src="https://github.com/user-attachments/assets/6f3867e0-4b9e-44ca-bd31-96ac68dc45e7" />
