@@ -2,6 +2,7 @@ package hpaConvertSp8ToOMETif_jnh;
 
 /**
  * Parts of this code were inherited from MotiQ (https://github.com/hansenjn/MotiQ).
+ * This got a major speed-up lift in v0.2.2 of the main plugin
  * @author Jan Niklas Hansen
  */
 
@@ -9,6 +10,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.LinkedList;
 
 import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
@@ -23,29 +25,39 @@ import javax.swing.SwingConstants;
 import ij.IJ;
 
 public class ProgressDialog extends javax.swing.JFrame implements ActionListener{
-	String dataLeft [], dataRight[], notifications [];
+	// Use LinkedLists instead of arrays for better performance
+	private LinkedList<String> dataLeft = new LinkedList<>();
+	private LinkedList<String> dataRight = new LinkedList<>();
+	private LinkedList<String> notifications = new LinkedList<>();
+	
 	public boolean notificationsAvailable = false, errorsAvailable = false;
 	int task, tasks;
 	
-	static final int ERROR = 0, NOTIFICATION = 1, LOG = 2;;
+	static final int ERROR = 0, NOTIFICATION = 1, LOG = 2;
 	JPanel bgPanel;
 	JScrollPane jScrollPaneLeft, jScrollPaneRight, jScrollPaneBottom;
-	JList ListeLeft, ListeRight, ListeBottom;
+	JList<String> ListeLeft, ListeRight, ListeBottom;
 	
 	private JProgressBar progressBar = new JProgressBar();
 	private double taskFraction = 0.0;
 	
+	// Cache for UI updates to reduce frequency
+	private long lastUIUpdate = 0;
+	private boolean notificationUpdatePending = false;	// For tracking if notifications need updating
+	private static final long UI_UPDATE_INTERVAL_MS = 500; // Update UI max every 500 ms
+
+
+
 	public ProgressDialog(String [] taskList) {
 		super();
 		initGUI();
-		dataLeft = taskList.clone();
 		tasks = taskList.length;
 		for(int i = 0; i < tasks; i++){
-			if(dataLeft[i]!=""){
-				dataLeft [i] = (i+1) + ": " + dataLeft [i]; 
+			if(taskList[i] != null && !taskList[i].isEmpty()){
+				dataLeft.add((i+1) + ": " + taskList[i]); 
 			}			
 		}
-		ListeLeft.setListData(dataLeft);
+		updateLeftList();
 		taskFraction = 0.0;
 		task = 1;
 	}
@@ -53,14 +65,13 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 	public ProgressDialog(String [] taskList, int [] seriesList, int addToSeriesNumber) {
 		super();
 		initGUI();
-		dataLeft = taskList.clone();
 		tasks = taskList.length;
 		for(int i = 0; i < tasks; i++){
-			if(dataLeft[i]!=""){
-				dataLeft [i] = (i+1) + ": " + dataLeft [i] + ", series " + (seriesList [i] + addToSeriesNumber); 
+			if(taskList[i] != null && !taskList[i].isEmpty()){
+				dataLeft.add((i+1) + ": " + taskList[i] + ", series " + (seriesList[i] + addToSeriesNumber)); 
 			}
 		}
-		ListeLeft.setListData(dataLeft);
+		updateLeftList();
 		taskFraction = 0.0;
 		task = 1;
 	}
@@ -71,14 +82,13 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			IJ.error("File loading error... nSeries != nTasks");
 		}
 		initGUI();
-		dataLeft = taskList.clone();
 		tasks = taskList.length;
 		for(int i = 0; i < tasks; i++){
-			if(dataLeft[i]!=""){
-				dataLeft [i] = (i+1) + ": " + dataLeft [i] + ", Series: " + seriesList [i]; 
+			if(taskList[i] != null && !taskList[i].isEmpty()){
+				dataLeft.add((i+1) + ": " + taskList[i] + ", Series: " + seriesList[i]); 
 			}			
 		}
-		ListeLeft.setListData(dataLeft);
+		updateLeftList();
 		taskFraction = 0.0;
 		task = 1;
 	}
@@ -88,170 +98,135 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 		this.setMinimumSize(new java.awt.Dimension(prefXSize, prefYSize+40));
 		this.setSize(prefXSize, prefYSize+40);			
 		this.setTitle("Multi-Task-Manager - by JN Hansen (\u00a9 2016)");
-//		this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+		
 		//Surface
-			bgPanel = new JPanel();
-			bgPanel.setLayout(new BoxLayout(bgPanel, BoxLayout.Y_AXIS));
-			bgPanel.setVisible(true);
-			bgPanel.setPreferredSize(new java.awt.Dimension(prefXSize,prefYSize-20));
-			{//TOP: Display tasks left, and tasks that were run right
-				int subXSize = prefXSize, subYSize = 200;
-				JPanel topPanel = new JPanel();
-				topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.X_AXIS));
-				topPanel.setVisible(true);
-				topPanel.setPreferredSize(new java.awt.Dimension(subXSize,subYSize));
+		bgPanel = new JPanel();
+		bgPanel.setLayout(new BoxLayout(bgPanel, BoxLayout.Y_AXIS));
+		bgPanel.setVisible(true);
+		bgPanel.setPreferredSize(new java.awt.Dimension(prefXSize,prefYSize-20));
+		
+		{//TOP: Display tasks left, and tasks that were run right
+			int subXSize = prefXSize, subYSize = 200;
+			JPanel topPanel = new JPanel();
+			topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.X_AXIS));
+			topPanel.setVisible(true);
+			topPanel.setPreferredSize(new java.awt.Dimension(subXSize,subYSize));
+			{
+				JPanel imPanel = new JPanel();
+				imPanel.setLayout(new BorderLayout());
+				imPanel.setVisible(true);
+				imPanel.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)),subYSize));
 				{
-					JPanel imPanel = new JPanel();
-					imPanel.setLayout(new BorderLayout());
-					imPanel.setVisible(true);
-					imPanel.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)),subYSize));
-					{
-						JLabel spacer = new JLabel("Remaining files to process:",SwingConstants.LEFT);
-						spacer.setMinimumSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-20),60));
-						spacer.setVisible(true);
-						imPanel.add(spacer,BorderLayout.NORTH); 
-					}
-					{
-						jScrollPaneLeft = new JScrollPane();
-						jScrollPaneLeft.setHorizontalScrollBarPolicy(30);
-						jScrollPaneLeft.setVerticalScrollBarPolicy(20);
-						jScrollPaneLeft.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-10), subYSize-60));
-						imPanel.add(jScrollPaneLeft,BorderLayout.CENTER); 
-						{
-							ListModel ListeModel = new DefaultComboBoxModel(new String[] { "" });
-							ListeLeft = new JList();
-							jScrollPaneLeft.setViewportView(ListeLeft);
-							ListeLeft.setModel(ListeModel);
-						}
-					}	
-					topPanel.add(imPanel);
+					JLabel spacer = new JLabel("Remaining files to process:",SwingConstants.LEFT);
+					spacer.setMinimumSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-20),60));
+					spacer.setVisible(true);
+					imPanel.add(spacer,BorderLayout.NORTH); 
 				}
 				{
-					JPanel imPanel = new JPanel();
-					imPanel.setLayout(new BorderLayout());
-					imPanel.setVisible(true);
-					imPanel.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)),subYSize));
+					jScrollPaneLeft = new JScrollPane();
+					jScrollPaneLeft.setHorizontalScrollBarPolicy(30);
+					jScrollPaneLeft.setVerticalScrollBarPolicy(20);
+					jScrollPaneLeft.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-10), subYSize-60));
+					imPanel.add(jScrollPaneLeft,BorderLayout.CENTER); 
 					{
-						JLabel spacer = new JLabel("Processed files:",SwingConstants.LEFT);
-						spacer.setMinimumSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-20),60));
-						spacer.setVisible(true);
-						imPanel.add(spacer,BorderLayout.NORTH); 
+						ListModel<String> ListeModel = new DefaultComboBoxModel<>(new String[] { "" });
+						ListeLeft = new JList<String>();
+						jScrollPaneLeft.setViewportView(ListeLeft);
+						ListeLeft.setModel(ListeModel);
 					}
-					{	
-						jScrollPaneRight = new JScrollPane();
-						jScrollPaneRight.setHorizontalScrollBarPolicy(30);
-						jScrollPaneRight.setVerticalScrollBarPolicy(20);
-						jScrollPaneRight.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-10), subYSize-60));
-						imPanel.add(jScrollPaneRight,BorderLayout.CENTER); 
-						{
-							ListModel ListeModel = new DefaultComboBoxModel(new String[] { "" });
-							ListeRight = new JList();
-							jScrollPaneRight.setViewportView(ListeRight);
-							ListeRight.setModel(ListeModel);
-						}
-					}
-					topPanel.add(imPanel);
-				}				
-				bgPanel.add(topPanel);
-			}
-			{
-				JPanel spacer = new JPanel();
-				spacer.setMaximumSize(new java.awt.Dimension(prefXSize,10));
-				spacer.setVisible(true);
-				bgPanel.add(spacer);
-			}
-			{
-				progressBar = new JProgressBar();
-				progressBar = new JProgressBar(0, 100);
-				progressBar.setPreferredSize(new java.awt.Dimension(prefXSize,40));
-				progressBar.setStringPainted(true);
-				progressBar.setValue(0);
-				progressBar.setString("no analysis started!");
-				bgPanel.add(progressBar);	
-			}
-			{
-				JPanel spacer = new JPanel();
-				spacer.setMaximumSize(new java.awt.Dimension(prefXSize,10));
-				spacer.setVisible(true);
-				bgPanel.add(spacer);
+				}	
+				topPanel.add(imPanel);
 			}
 			{
 				JPanel imPanel = new JPanel();
 				imPanel.setLayout(new BorderLayout());
 				imPanel.setVisible(true);
-				imPanel.setPreferredSize(new java.awt.Dimension(prefXSize,140));
+				imPanel.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)),subYSize));
 				{
-					JLabel spacer = new JLabel("Notifications:", SwingConstants.LEFT);
-					spacer.setMinimumSize(new java.awt.Dimension(prefXSize,40));
+					JLabel spacer = new JLabel("Processed files:",SwingConstants.LEFT);
+					spacer.setMinimumSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-20),60));
 					spacer.setVisible(true);
-					imPanel.add(spacer, BorderLayout.NORTH);
+					imPanel.add(spacer,BorderLayout.NORTH); 
 				}
 				{	
-					jScrollPaneBottom = new JScrollPane();
-					jScrollPaneBottom.setHorizontalScrollBarPolicy(30);
-					jScrollPaneBottom.setVerticalScrollBarPolicy(20);
-					jScrollPaneBottom.setPreferredSize(new java.awt.Dimension(prefXSize, 100));
-					imPanel.add(jScrollPaneBottom, BorderLayout.CENTER);
+					jScrollPaneRight = new JScrollPane();
+					jScrollPaneRight.setHorizontalScrollBarPolicy(30);
+					jScrollPaneRight.setVerticalScrollBarPolicy(20);
+					jScrollPaneRight.setPreferredSize(new java.awt.Dimension((int)((double)(subXSize/2.0)-10), subYSize-60));
+					imPanel.add(jScrollPaneRight,BorderLayout.CENTER); 
 					{
-						ListModel ListeModel = new DefaultComboBoxModel(new String[] { "" });
-						ListeBottom = new JList();
-						jScrollPaneBottom.setViewportView(ListeBottom);
-						ListeBottom.setModel(ListeModel);
+						ListModel<String> ListeModel = new DefaultComboBoxModel<>(new String[] { "" });
+						ListeRight = new JList<String>();
+						jScrollPaneRight.setViewportView(ListeRight);
+						ListeRight.setModel(ListeModel);
 					}
 				}
-				bgPanel.add(imPanel);
+				topPanel.add(imPanel);
+			}				
+			bgPanel.add(topPanel);
+		}
+		{
+			JPanel spacer = new JPanel();
+			spacer.setMaximumSize(new java.awt.Dimension(prefXSize,10));
+			spacer.setVisible(true);
+			bgPanel.add(spacer);
+		}
+		{
+			progressBar = new JProgressBar();
+			progressBar = new JProgressBar(0, 100);
+			progressBar.setPreferredSize(new java.awt.Dimension(prefXSize,40));
+			progressBar.setStringPainted(true);
+			progressBar.setValue(0);
+			progressBar.setString("no analysis started!");
+			bgPanel.add(progressBar);	
+		}
+		{
+			JPanel spacer = new JPanel();
+			spacer.setMaximumSize(new java.awt.Dimension(prefXSize,10));
+			spacer.setVisible(true);
+			bgPanel.add(spacer);
+		}
+		{
+			JPanel imPanel = new JPanel();
+			imPanel.setLayout(new BorderLayout());
+			imPanel.setVisible(true);
+			imPanel.setPreferredSize(new java.awt.Dimension(prefXSize,140));
+			{
+				JLabel spacer = new JLabel("Notifications:", SwingConstants.LEFT);
+				spacer.setMinimumSize(new java.awt.Dimension(prefXSize,40));
+				spacer.setVisible(true);
+				imPanel.add(spacer, BorderLayout.NORTH);
 			}
-			getContentPane().add(bgPanel);		
+			{	
+				jScrollPaneBottom = new JScrollPane();
+				jScrollPaneBottom.setHorizontalScrollBarPolicy(30);
+				jScrollPaneBottom.setVerticalScrollBarPolicy(20);
+				jScrollPaneBottom.setPreferredSize(new java.awt.Dimension(prefXSize, 100));
+				imPanel.add(jScrollPaneBottom, BorderLayout.CENTER);
+				{
+					ListModel<String> ListeModel = new DefaultComboBoxModel<>(new String[] { "" });
+					ListeBottom = new JList<String>();
+					jScrollPaneBottom.setViewportView(ListeBottom);
+					ListeBottom.setModel(ListeModel);
+				}
+			}
+			bgPanel.add(imPanel);
+		}
+		getContentPane().add(bgPanel);		
 	}
 	
 	@Override
 	public void actionPerformed(ActionEvent ae) {
-		Object eventQuelle = ae.getSource();
-//		if (eventQuelle == abortButton){
-//			abort = true;
-////			updateDisplay();
-//		}	
+		// Future use
 	}
 	
 	public void moveTask(int i){
-		if(dataRight == null){
-			dataRight = new String [2];
-			dataRight [0] = "" + dataLeft[0];
+		if(!dataLeft.isEmpty()) {
+			String completedTask = dataLeft.removeFirst();
+			dataRight.addFirst(completedTask);
 			
-			String [] dataLeftCopy = dataLeft.clone();
-			dataLeft = new String [dataLeft.length-1];
-			for(int j = 1; j < dataLeftCopy.length; j++){
-				dataLeft[j-1] = dataLeftCopy[j];
-			}
-		}else if(i==(tasks-1)){
-			String [] dataRightCopy = dataRight.clone();
-			dataRight = new String [dataRight.length+1];
-			for(int j = 0; j < dataRightCopy.length; j++){
-				dataRight[j+1] = dataRightCopy[j];
-			}
-			dataRight[0] = ""+dataLeft[0];			
-			dataLeft = new String [2];
-		}else{
-			String [] dataRightCopy = dataRight.clone();
-			dataRight = new String [dataRight.length+1];
-			for(int j = 0; j < dataRightCopy.length; j++){
-				dataRight[j+1] = dataRightCopy[j];
-			}
-			dataRight[0] = ""+dataLeft[0];
-						
-			String [] dataLeftCopy = dataLeft.clone();
-			dataLeft = new String [dataLeft.length-1];
-			for(int j = 1; j < dataLeftCopy.length; j++){
-				dataLeft[j-1] = dataLeftCopy[j];
-			}			
-		}	
-		ListeLeft.setListData(dataLeft);
-		ListeRight.setListData(dataRight);
-		try {
-			jScrollPaneLeft.updateUI();
-			jScrollPaneRight.updateUI();
-			bgPanel.updateUI();			
-		}catch(Exception e) {			
+			updateLeftList();
+			updateRightList();
 		}
 		
 		if(task == tasks){
@@ -271,6 +246,7 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 				progressBar.setForeground(new Color(0,140,0));
 			}
 			progressBar.setValue(100);
+			forceUIUpdate(); // Force final update
 		}else{
 			taskFraction = 0.0;
 			task++;
@@ -284,23 +260,10 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			notificationsAvailable = true;
 		}
 		
-		if(notifications==null){
-			notifications = new String [2];
-			notifications [0] = message;
-		}else{
-			String [] notificationsCopy = notifications.clone();
-			notifications = new String [notifications.length+1];
-			for(int j = 0; j < notificationsCopy.length; j++){
-				notifications[j+1] = notificationsCopy[j];
-			}
-			notifications [0] = message;
-		}
-		ListeBottom.setListData(notifications);
-		try {
-			jScrollPaneBottom.updateUI();
-			bgPanel.updateUI();			
-		}catch(Exception e) {			
-		}
+		notifications.addFirst(message);
+		// Don't update immediately - let throttling handle it
+		// This saves many unnecessary UI updates
+		scheduleNotificationUpdate();
 	}
 	
 	public void addToBar(double addFractionOfTask){
@@ -308,11 +271,9 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 		if(taskFraction >= 1.0){
 			taskFraction = 0.9;
 		}
-		progressBar.setValue((int)Math.round(((double)(task-1)/tasks)*100.0+taskFraction*(100/tasks)));
-		try {
-			bgPanel.updateUI();			
-		}catch(Exception e) {			
-		}
+		int newValue = (int)Math.round(((double)(task-1)/tasks)*100.0+taskFraction*(100/tasks));
+		progressBar.setValue(newValue);
+		updateUITimed();
 	}
 	
 	public void setBar(double fractionOfTask){
@@ -320,26 +281,59 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 		if(taskFraction > 1.0){
 			taskFraction = 0.9;
 		}
-		progressBar.setValue((int)Math.round(((double)(task-1)/tasks)*100.0+taskFraction*(100/tasks)));
-		try {
-			bgPanel.updateUI();			
-		}catch(Exception e) {			
-		}
+		int newValue = (int)Math.round(((double)(task-1)/tasks)*100.0+taskFraction*(100/tasks));
+		progressBar.setValue(newValue);
+		updateUITimed();
 	}
 	
 	public void updateBarText(String text){
 		progressBar.setString("Task " + task + "/" + tasks + ": " + text);
-		try {
-			bgPanel.updateUI();			
-		}catch(Exception e) {			
-		}
+		updateUITimed();
 	}
 	
 	public void replaceBarText(String text){			
 		progressBar.setString(text);
+		updateUITimed();
+	}
+	
+	// Helper methods to update lists efficiently
+	private void updateLeftList() {
+		ListeLeft.setListData(dataLeft.toArray(new String[0]));
+	}
+	
+	private void updateRightList() {
+		ListeRight.setListData(dataRight.toArray(new String[0]));
+	}
+	
+	private void updateNotificationsList() {
+		ListeBottom.setListData(notifications.toArray(new String[0]));
+		notificationUpdatePending = false;
+	}
+
+	// Mark that notifications need updating
+	private void scheduleNotificationUpdate() {
+		notificationUpdatePending = true;
+		updateUITimed();
+	}
+
+	// Throttle UI updates to prevent slowdown
+	private void updateUITimed() {
+		long now = System.currentTimeMillis();
+		if (now - lastUIUpdate > UI_UPDATE_INTERVAL_MS) {
+			forceUIUpdate();
+		}
+	}
+
+	private void forceUIUpdate() {
 		try {
-			bgPanel.updateUI();			
-		}catch(Exception e) {			
+			// Update notifications list only if there are pending updates
+			if(notificationUpdatePending) {
+				updateNotificationsList();
+			}
+			bgPanel.updateUI();
+			lastUIUpdate = System.currentTimeMillis();
+		} catch(Exception e) {
+			// Ignore UI update errors
 		}
 	}
 }
