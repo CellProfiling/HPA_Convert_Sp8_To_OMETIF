@@ -38,7 +38,7 @@ public class OpenFilesDialog extends javax.swing.JFrame implements ActionListene
 	JSeparator jSeparator2;
 	JPanel bgPanel;
 	JScrollPane jScrollPane1;
-	JList Liste1;
+	JList<String> Liste1;
 	JButton loadSingleFilesButton, loadByPatternButtom, removeFileButton, goButton;
 
 	public OpenFilesDialog() {
@@ -56,7 +56,7 @@ public class OpenFilesDialog extends javax.swing.JFrame implements ActionListene
 		int prefXSize = 600, prefYSize = 400;
 		this.setMinimumSize(new java.awt.Dimension(prefXSize, prefYSize + 40));
 		this.setSize(prefXSize, prefYSize + 40);
-		this.setTitle("Multi-File-Manager - by JNH and SR (\u00a9 2016-20)");
+		this.setTitle("Multi-File-Manager - by JNH and SR (\u00a9 2016-2026)");
 //			this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 		// Surface
 		bgPanel = new JPanel();
@@ -72,7 +72,7 @@ public class OpenFilesDialog extends javax.swing.JFrame implements ActionListene
 			{
 				Liste1 = new JList();
 				jScrollPane1.setViewportView(Liste1);
-				Liste1.setModel(new DefaultComboBoxModel(new String[] { "" }));
+				Liste1.setModel(new DefaultComboBoxModel<>(new String[] { "" }));
 			}
 			{
 				JPanel spacer = new JPanel();
@@ -131,7 +131,7 @@ public class OpenFilesDialog extends javax.swing.JFrame implements ActionListene
 	public void actionPerformed(ActionEvent ae) {
 		Object eventQuelle = ae.getSource();
 		if (eventQuelle == loadSingleFilesButton) {
-			String OS = System.getProperty("os.name").toUpperCase();			
+//			String OS = System.getProperty("os.name").toUpperCase();			
 //			if(OS.contains("MAC")) {
 //				java.awt.FileDialog fd = new java.awt.FileDialog(this, "Select files to add to list.");
 //				fd.setDirectory(System.getProperty("user.dir", "."));
@@ -265,7 +265,6 @@ public class OpenFilesDialog extends javax.swing.JFrame implements ActionListene
 		return s;
 	}
 
-	@SuppressWarnings("unchecked")
 	public void updateDisplay() {
 		String resultsString[] = new String[filesToOpen.size()];
 		for (int i = 0; i < filesToOpen.size(); i++) {
