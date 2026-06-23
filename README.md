@@ -62,37 +62,63 @@ On Mac OS, do not place the ImageJ / FIJI application into the *Applications* fo
 
 ### Step by Step
 
-0. Make sure the plugin was installed
-1. Start the plugin through the FIJI menu: <i>Plugins > Cell Profiling > Extend ome.tif from Sp8 to LIMS-like ome.tif (v...)</i>
-2. Enter a file path for the output folder - Notes:
-   1. All files for LIMS will be saved into this folder.
-   2. This folder can also be selected on a mounted drive (e.g., the confocal server, from where LIMS imports images).
-   3. IMPORTANT: Make sure to either (A) not name the folder already in a way that LIMS will start importing while you are still exporting files with this plugin (DO NOT name it "if<the number>") or (B) not have started acquisition yet (in this case it is ok to name it "if<the number>". This is important since otherwise you will likely get lots of LIMS errors or export errors.
+0. **Prerequisites**: Make sure the plugin is installed (see installation instructions above)
+1. **Launch the plugin** through the FIJI menu: <i>Plugins > Cell Profiling > Extend ome.tif from Sp8 to LIMS-like ome.tif (v...)</i>
+2. **Configure settings**  
+   The main dialog appears with four configuration sections:
 
-<p align="center">
-   <img width="600" src="https://github.com/user-attachments/assets/71509dba-e587-4dba-8fdb-146633aba42d" />
-</p>
+   <p align="center">
+      <img width="600" src="https://github.com/user-attachments/assets/e682ce51-d612-41dc-a49e-5c9e20fdc762" />
+   </p>
 
-3. Click OK!
-4. A dialog pops up that asks you to list the folders you want to process.
+   **Important settings to configure:**
+      1. **Output folder path**: Where processed files will be saved
+         - ⚠️ **CRITICAL**: Do NOT name it `if####` while processing (LIMS will auto-import incomplete data!)
+         - Use a temporary name (e.g., `temp_export`), then rename to `if####` after completion
+         - Can be on a mounted network drive for direct LIMS access
+         - Should be empty or have unique name to avoid overwriting existing files
+   
+      2. **Channel assignments** (REQUIRED)
+         - ⚠️ **CRITICAL**: Make sure to get this right, since this is how LIMS will detect what channel is which!
+         - Map channels 0-4 to: blue, green, red, yellow, white/NA
+         - All four core colors (blue, green, red, yellow) must be assigned
+         - White is optional
+         - Green can be assigned multiple times for special cases (like HPA Sperm Data, requires [Channel Selector tool](https://github.com/CellProfiling/HPA_LIMS_Channel_Selector/) before LIMS upload)
+      3. **Logging options**: Leave unchecked unless troubleshooting
 
-<p align="center">
-   <img width="500" src="https://github.com/user-attachments/assets/3875f018-1cab-4f0d-af41-6c662010639f" />
-</p>
+3. Click OK! The plugin does some safety checks on the settings and might alert you of a settings problem (file path does not exist, channel combinations not allowed, ...) in case it detects one.
+4. **Select input folders**  
+   A file selection dialog appears:
 
-5. Select the folders you want to process
+   <p align="center">
+      <img width="500" src="https://github.com/user-attachments/assets/3875f018-1cab-4f0d-af41-6c662010639f" />
+   </p>
+   
+   - Click "select files individually" to browse for folders
+   - Select folders containing:
+      - `.ome.tif` files (exported from LASX)
+      - `MetaData` subfolder with `.ome.xml` files
+   - Can select multiple folders
+   - Can select parent directories with subdirectories with these files
 
-<p align="center">
-   <img width="680" alt="image" src="https://github.com/user-attachments/assets/e58d5289-f548-45b8-8439-09c4ebb5244d" />
-</p>
+   <p align="center">
+      <img width="680" alt="image" src="https://github.com/user-attachments/assets/e58d5289-f548-45b8-8439-09c4ebb5244d" />
+   </p>
 
-6. Click 'Start processing'
+5. Click 'Start processing'
 
 <p align="center">
    <img width="500" alt="image" src="https://github.com/user-attachments/assets/2637f498-3802-4ac9-9b9f-9511fca59792" />
 </p>
 
-6. Now let the plugin run. It is normal that some messages are logged on the bottom.
+5. **Monitor progress**  
+   A progress window shows:
+   - Remaining and processed files
+   - Current task status with progress bar
+   - Elapsed time and estimated remaining time
+   - Notifications and errors (if any)
+   Let the plugin run. It is normal that some messages are logged on the bottom.
+
    1. It is normal that there might be an additional window popping up with some cryptic messages. This is normal and comes from OME-TIF loading through BioFormats plugins.
 
 <p align="center">
@@ -107,22 +133,34 @@ On Mac OS, do not place the ImageJ / FIJI application into the *Applications* fo
 
    3. The only problem is if ERRORS appear, which will let the bar turn red at the end of the processing and the message says: "Could not process" - see under point 7. 
 
-7. When the processing is done, the bar should turn green. If it is not green but red, you might have had processing errors.
-   1. Example for successful processing: GREEN or ORANGE bar. The orange bar just indicates that there are some notifications. You can review those - they might be as specified in 6.i. and unless they are concering, all is good.
+7. **Processing Done**
+   When the processing is done, the bar should turn green or orange. If the bar is red, you might have had processing errors.
+   ✅ **Success** (green bar): All files processed  
+   ⚠️ **Warnings** (orange bar): Processing completed with minor issues (check notifications)  
+   ❌ **Errors** (red bar): Some files failed (see notifications for details)
+   
+   1. Example for ✅ successful processing with GREEN bar
+      <p align="center">
+         <img width="500" alt="image" src="https://github.com/user-attachments/assets/c3193ff0-3f24-4bfe-98ef-4f2d7d3c467e" />
+      </p>
+      
+   2. Example for ⚠️ successful processing with ORANGE bar. The orange bar just indicates that there are some notifications. You can review those - they might be as specified in 6.i. and unless they are concering, all is good.
 
-<p align="center">
-   <img width="650" alt="image" src="https://github.com/user-attachments/assets/2994957f-184b-46bb-a34b-7962f5a2675e" />
-</p>
+      <p align="center">
+         <img width="650" alt="image" src="https://github.com/user-attachments/assets/2994957f-184b-46bb-a34b-7962f5a2675e" />
+      </p>
+      
+   3. Example for ❌ not-successfully processed images: The bar has turned red at the end of the processing and the message says: "Could not process" for certain files. If you cannot source the problem back to a wrong setting or export from Leica LASX, please submit an issue as follows: Click on the messages, press Control+A or Cmd+A to mark all messages, press Control+C or Cmd+C to copy all of the messages, submit with a notification explaining the issue to be submitted [here](https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/issues) to ask for feedback from the developer. Make sure to answer follow up questions from the developer.
 
+      <p align="center">
+         <img width="650" alt="image" src="https://github.com/user-attachments/assets/6f3867e0-4b9e-44ca-bd31-96ac68dc45e7" />
+      </p>
 
-
-   3. Example for not-successfully processed images: The bar has turned red at the end of the processing and the message says: "Could not process" for certain files. If you cannot source the problem back to a wrong setting or export from Leica LASX, please submit an issue as follows: Click on the messages, press Control+A or Cmd+A to mark all messages, press Control+C or Cmd+C to copy all of the messages, submit with a notification explaining the issue to be submitted [here](https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/issues) to ask for feedback from the developer. Make sure to answer follow up questions from the developer.
-
-<p align="center">
-   <img width="650" alt="image" src="https://github.com/user-attachments/assets/6f3867e0-4b9e-44ca-bd31-96ac68dc45e7" />
-</p>
-
-8. If processing was successful, you can proceed to LIMS upload: Copy the output folder to the folder from where LIMS imports files and rename it to the name that is required for LIMS import (```if<4-digit plate number>```)
+9. **Upload to LIMS**  
+   - Verify all files were processed successfully
+   - If using duplicate green channels, run [Channel Selector tool](https://github.com/CellProfiling/HPA_LIMS_Channel_Selector/) first
+   - Rename output folder to `if####` format (where #### is your 4-digit plate number)
+   - Copy/move to LIMS import location
 
 ---
 
