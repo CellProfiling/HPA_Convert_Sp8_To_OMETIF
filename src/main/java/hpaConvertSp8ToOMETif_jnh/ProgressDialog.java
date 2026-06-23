@@ -10,6 +10,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+
 import java.util.LinkedList;
 
 import javax.swing.BoxLayout;
@@ -44,9 +45,10 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 	// Cache for UI updates to reduce frequency
 	private long lastUIUpdate = 0;
 	private boolean notificationUpdatePending = false;	// For tracking if notifications need updating
-	private static final long UI_UPDATE_INTERVAL_MS = 500; // Update UI max every 500 ms
+	private static final long UI_UPDATE_INTERVAL_MS = 1000; // Update UI max every 1000 ms
 
-
+	private long startTime = 0;
+	private JLabel timeLabel;
 
 	public ProgressDialog(String [] taskList) {
 		super();
@@ -181,6 +183,15 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			bgPanel.add(progressBar);	
 		}
 		{
+			// Time label
+			timeLabel = new JLabel("Elapsed: 00:00:00 | Estimated remaining: --:--:--");
+			timeLabel.setHorizontalAlignment(SwingConstants.CENTER);
+			timeLabel.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+			timeLabel.setPreferredSize(new java.awt.Dimension(prefXSize, 20));
+			timeLabel.setFont(new java.awt.Font("Sansserif", java.awt.Font.PLAIN, 10));
+			bgPanel.add(timeLabel);
+		}
+		{
 			JPanel spacer = new JPanel();
 			spacer.setMaximumSize(new java.awt.Dimension(prefXSize,10));
 			spacer.setVisible(true);
@@ -220,6 +231,48 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 		// Future use
 	}
 	
+	public void startTiming() {
+		startTime = System.currentTimeMillis();
+		updateTimeDisplay();
+	}
+	
+	private void updateTimeDisplay() {
+		if(startTime == 0) return;
+		
+		long currentTime = System.currentTimeMillis();
+		long elapsed = currentTime - startTime;
+		
+		// Calculate elapsed time
+		long elapsedSeconds = elapsed / 1000;
+		long hours = elapsedSeconds / 3600;
+		long minutes = (elapsedSeconds % 3600) / 60;
+		long seconds = elapsedSeconds % 60;
+		
+		String elapsedStr = String.format("%02d:%02d:%02d", hours, minutes, seconds);
+		
+		// Calculate estimated remaining time
+		String remainingStr = "--:--:--";
+		if(task > 0 && progressBar.getValue() > 0) {
+			double percentComplete = progressBar.getValue() / 100.0;
+			if(percentComplete > 0.01) { // Only estimate after 1% complete
+				long estimatedTotal = (long)(elapsed / percentComplete);
+				long remaining = estimatedTotal - elapsed;
+				
+				if(remaining > 0) {
+					long remainingSeconds = remaining / 1000;
+					long remHours = remainingSeconds / 3600;
+					long remMinutes = (remainingSeconds % 3600) / 60;
+					long remSeconds = remainingSeconds % 60;
+					remainingStr = String.format("%02d:%02d:%02d", remHours, remMinutes, remSeconds);
+				} else {
+					remainingStr = "00:00:00";
+				}
+			}
+		}
+		
+		timeLabel.setText("Elapsed: " + elapsedStr + " | Estimated remaining: " + remainingStr);
+	}
+	
 	public void moveTask(int i){
 		if(!dataLeft.isEmpty()) {
 			String completedTask = dataLeft.removeFirst();
@@ -230,6 +283,7 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 		}
 		
 		if(task == tasks){
+			updateTimeDisplay();
 			if(errorsAvailable){
 				replaceBarText("processing done but some tasks failed (see notifications)!");
 				progressBar.setValue(100); 		
@@ -330,6 +384,7 @@ public class ProgressDialog extends javax.swing.JFrame implements ActionListener
 			if(notificationUpdatePending) {
 				updateNotificationsList();
 			}
+			updateTimeDisplay();
 			bgPanel.updateUI();
 			lastUIUpdate = System.currentTimeMillis();
 		} catch(Exception e) {
