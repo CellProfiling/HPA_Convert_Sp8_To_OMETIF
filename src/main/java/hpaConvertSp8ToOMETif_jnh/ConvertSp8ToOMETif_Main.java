@@ -1,7 +1,7 @@
 package hpaConvertSp8ToOMETif_jnh;
 
 /** ===============================================================================
-* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.2.1
+* HPA_Convert_Sp8_To_OMETIF_JNH.java Version 0.2.2
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -15,7 +15,7 @@ package hpaConvertSp8ToOMETif_jnh;
 * See the GNU General Public License for more details.
 *  
 * Copyright (C) Jan Niklas Hansen
-* Date: June 23, 2022 (This Version: September 15, 2025)
+* Date: June 23, 2022 (This Version: July 22, 2026)
 *   
 * For any questions please feel free to contact me (jan.hansen@scilifelab.se).
 * =============================================================================== */
@@ -89,7 +89,8 @@ import ome.xml.model.primitives.PercentFraction;
 public class ConvertSp8ToOMETif_Main implements PlugIn {
 	// Name variables
 	static final String PLUGINNAME = "HPA Convert Sp8-OME-Tif to LIMS-OME-Tif";
-	static final String PLUGINVERSION = "0.2.1";
+	static final String PLUGINVERSION = "0.2.2";
+	static final String PLUGINGITHUBURL = "https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/";
 
 	// Fix fonts
 	static final Font SuperHeadingFont = new Font("Sansserif", Font.BOLD, 16);
@@ -110,7 +111,11 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	static SimpleDateFormat NameDateFormatter = new SimpleDateFormat("yyMMdd_HHmmss");
 	static SimpleDateFormat FullDateFormatter = new SimpleDateFormat("yyyy-MM-dd	HH:mm:ss");
 	static SimpleDateFormat FullDateFormatter2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
+	
+	// Precomile comparison variables
+	private static final String CHANNEL_PMT_TRANS_SP8 = "PMT Trans";
+	private static final String CHANNEL_PMT_TRANS_STELLARIS = "Trans PMT";
+	
 	// Progress Dialog
 	ProgressDialog progress;
 	boolean processingDone = false;
@@ -124,19 +129,25 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	
 	boolean loadLif = false;	//TODO make optional when this method is implemented!
 	boolean extendOnly = true;
-	
-	String imageType [] = new String [] {"z-stack"};
-	String selectedImageType = imageType [0];
-	
+		
+	String channelType [] = new String [] {"blue (DNA)","red (MT/Cilia/Flagella)","white (TI)","green (Protein of Interest)","yellow (ER/BB/Mito)","NA"};
+	String selectedChannelType [] = new String [5];
+		
 	String outPath = "E:" + System.getProperty("file.separator") + System.getProperty("file.separator") + "OME Out"
 			+ System.getProperty("file.separator");
 //	String outPath = "/media/jan/Drive/OME_Out/"; //Linux path if codwork is done on linux
+	
+	
 	
 	// -----------------define params for Dialog-----------------
 
 	@Override
 	public void run(String arg) {
-
+		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		// -------------------------------DEFINITIONS----------------------------------
+		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+		final String FILESEP = System.getProperty("file.separator");
+		
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 		// ---------------------------------INIT JOBS----------------------------------
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -150,7 +161,23 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		String name[] = { "", "" };
 		String dir[] = { "", "" };
 		String fullPath[] = { "", "" };
+		
+		// Load saved preferences
+		selectedChannelType[0] = ij.Prefs.get("HPA_Sp8Convert.channel0", channelType[0]);
+		selectedChannelType[1] = ij.Prefs.get("HPA_Sp8Convert.channel1", channelType[1]);
+		selectedChannelType[2] = ij.Prefs.get("HPA_Sp8Convert.channel2", channelType[2]);
+		selectedChannelType[3] = ij.Prefs.get("HPA_Sp8Convert.channel3", channelType[3]);
+		selectedChannelType[4] = ij.Prefs.get("HPA_Sp8Convert.channel4", channelType[4]);
+		logXMLProcessing = ij.Prefs.get("HPA_Sp8Convert.logXML", logXMLProcessing);
+		logDetectedOriginalMetadata = ij.Prefs.get("HPA_Sp8Convert.logOriginal", logDetectedOriginalMetadata);
+		logWholeOMEXMLComments = ij.Prefs.get("HPA_Sp8Convert.logWholeXML", logWholeOMEXMLComments);
 
+		// Load output path and verify it exists
+		String savedOutPath = ij.Prefs.get("HPA_Sp8Convert.outPath", outPath);
+		if(new File(savedOutPath).exists()) {
+			outPath = savedOutPath;
+		}
+		
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 		// --------------------------REQUEST USER-SETTINGS-----------------------------
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -159,44 +186,48 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		while(true) {	// While loop keeps showing the dialog until a correct selection was created. 
 			gd = new GenericDialog(PLUGINNAME + " - set parameters");	
 			//show Dialog-----------------------------------------------------------------
-			gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2025 JN Hansen", SuperHeadingFont);	
+			gd.setInsets(0,0,0);	gd.addMessage(PLUGINNAME + ", Version " + PLUGINVERSION + ", \u00a9 2022-2026 JN Hansen", SuperHeadingFont);	
 			
-			gd.setInsets(15,0,0);	gd.addMessage("Notes:", SubHeadingFont);
-			
-			gd.setInsets(0,0,0);	gd.addMessage("The plugin processes .ome.tif images exported from the LASX software of the Leica Sp8 or Stellaris8 at the Human Protein Atlas, Sweden.", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("The type of recording is typically a multi-well multi-position recording through the Navigator in LASX and thus in a TileScan format.", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("Manual recordings can also be processed but, in LASX, should be first restructured into a Collection", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("that looks like TileScan 1 > Row > Column > the image (stack), and then exported.", InstructionsFont);
-			gd.setInsets(5,0,0);	gd.addMessage("The input for this plugin needs to be a folder containing a file system with .ome.tif files exported via the 3D visualization integration in LASX", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("(Export as OME-TIFF). The plugin detects all .ome.tif images in the file system for which a corresponding metadata xml file is available.",InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("The plugin will look for an xml file in a MetaData subfolder of the same folder as the .ome.tif file (MetaData/<regionname>.ome.xml).", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("This xml is then read to enrich the OME metadata in the tif files loaded before saving them to the output directory.", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("The files in the output directory can then directly be detected by LIMS.", InstructionsFont);	
-			gd.setInsets(5,0,0);	gd.addMessage("NOTE: This plugin runs only in FIJI (not in a blank ImageJ, where there is not OME BioFormats integration).", InstructionsFont, Color.MAGENTA);		
+			gd.setInsets(0,0,0);	gd.addMessage("Quick Start:", SubHeadingFont);
+			gd.setInsets(0,0,0);	gd.addMessage("This plugin enriches OME-TIFF files from Leica Sp8/Stellaris8 with metadata for import into HPA's LIMS.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("For detailed instructions, click the 'Help' button below or visit the GitHub repository.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("NOTE: Requires FIJI (not ImageJ) due to OME BioFormats integration.", InstructionsFont, Color.MAGENTA);
 						
-			gd.setInsets(15,0,0);	gd.addMessage("Processing Settings", SubHeadingFont);		
-			gd.setInsets(0,0,0);	gd.addChoice("Image type", imageType, selectedImageType);
-			gd.setInsets(0,0,0);	gd.addStringField("Filepath to output file", outPath, 50);
-			gd.setInsets(0,0,0);	gd.addMessage("This path defines where outputfiles are stored.", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("Make sure this path does not contain similarly named files - the program will overwrite identically named files!.", InstructionsFont);
+			gd.setInsets(2,0,0);	gd.addMessage("1. Output", SubHeadingFont);
+			gd.setInsets(0,0,0);	gd.addStringField("Output folder filepath", outPath, 50);
+			gd.setInsets(0,0,0);	gd.addMessage("WARNING: Do NOT name folder 'if####' while processing (use temp name, rename after completion).", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("WARNING: Plugin overwrites files with identical names. Use empty folder or unique folder name.", InstructionsFont);
 			
-			gd.setInsets(15,0,0);	gd.addMessage("Logging settings (troubleshooting options)", SubHeadingFont);		
+			gd.setInsets(2,0,0);	gd.addMessage("2. Channel Assignments", SubHeadingFont);
+			gd.setInsets(0,0,0);	gd.addMessage("Map microscope channels to LIMS channel types:", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addChoice("Channel ch0 > ", channelType, selectedChannelType[0]);
+			gd.setInsets(0,0,0);	gd.addChoice("Channel ch1 > ", channelType, selectedChannelType[1]);
+			gd.setInsets(0,0,0);	gd.addChoice("Channel ch2 > ", channelType, selectedChannelType[2]);
+			gd.setInsets(0,0,0);	gd.addChoice("Channel ch3 > ", channelType, selectedChannelType[3]);
+			gd.setInsets(0,0,0);	gd.addChoice("Channel ch4 (if exists) > ", channelType, selectedChannelType[4]);			
+			gd.setInsets(0,0,0);	gd.addMessage("REQUIRED: blue, green, red, yellow must each be assigned. Optional: white.", InstructionsFont);
+			gd.setInsets(0,0,0);	gd.addMessage("EXCEPTION: Duplicate green allowed (if HPA sperm data, see Help for additional channel selection tool).", InstructionsFont);
+			
+			gd.setInsets(2,0,0);	gd.addMessage("3. Logging (Troubleshooting)", SubHeadingFont);		
 			gd.setInsets(0,0,0);	gd.addCheckbox("Log transfer metadata file (.ome.xml) > OME image metadata", logXMLProcessing);
-			gd.setInsets(5,0,0);	gd.addCheckbox("Log transfer of original metadata", logDetectedOriginalMetadata);
-			gd.setInsets(5,0,0);	gd.addCheckbox("Log the OME metadata XML before and after extending", logWholeOMEXMLComments);
+			gd.setInsets(0,0,0);	gd.addCheckbox("Log transfer of original metadata", logDetectedOriginalMetadata);
+			gd.setInsets(0,0,0);	gd.addCheckbox("Log the OME metadata XML before and after extending", logWholeOMEXMLComments);
 			
-			gd.setInsets(15,0,0);	gd.addMessage("Input files", SubHeadingFont);
-			gd.setInsets(0,0,0);	gd.addMessage("A dialog will be shown when you press OK that allows you to list folders to be processed.", InstructionsFont);
-			gd.setInsets(0,0,0);	gd.addMessage("List the directories that contain .ome.tif files (including MetaData folders) to be processed.", InstructionsFont);
+			gd.setInsets(2,0,0);	gd.addMessage("4. Input Files", SubHeadingFont);
+			gd.setInsets(0,0,0);	gd.addMessage("After clicking OK, select folders with .ome.tif files and MetaData subfolders.", InstructionsFont);
 			
-			gd.addHelp("https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/");
+			gd.addHelp(PLUGINGITHUBURL);
 			
 			gd.showDialog();
 			//show Dialog-----------------------------------------------------------------
 
-			//read and process variables--------------------------------------------------	
-			selectedImageType = gd.getNextChoice();
+			//read and process variables--------------------------------------------------
 			outPath = gd.getNextString();
+			selectedChannelType[0] = gd.getNextChoice();
+			selectedChannelType[1] = gd.getNextChoice();
+			selectedChannelType[2] = gd.getNextChoice();
+			selectedChannelType[3] = gd.getNextChoice();
+			selectedChannelType[4] = gd.getNextChoice();			
 			logXMLProcessing = gd.getNextBoolean();
 			logDetectedOriginalMetadata = gd.getNextBoolean();
 			logWholeOMEXMLComments = gd.getNextBoolean();
@@ -212,11 +243,211 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			}
 			
 			// Additional validation checks can be added here
+			// Additional validation checks - channel assignments
+			if(leave) {
+			    // Track color counts
+			    int blueCount = 0;
+			    int greenCount = 0;
+			    int redCount = 0;
+			    int yellowCount = 0;
+			    int whiteCount = 0;
+			    int naCount = 0;
+			    
+			    for(int ch = 0; ch < selectedChannelType.length; ch++) {
+			        String channelColor = selectedChannelType[ch];
+			        
+			        // Extract color (first word before parenthesis or space)
+			        if(channelColor.contains(" (")) {
+			            channelColor = channelColor.substring(0, channelColor.indexOf(" ("));
+			        } else if(channelColor.contains(" ")) {
+			            channelColor = channelColor.substring(0, channelColor.indexOf(" "));
+			        }
+			        
+			        // Count each color assignment
+			        if(channelColor.equalsIgnoreCase("blue")) {
+			            blueCount++;
+			        } else if(channelColor.equalsIgnoreCase("green")) {
+			            greenCount++;
+			        } else if(channelColor.equalsIgnoreCase("red")) {
+			            redCount++;
+			        } else if(channelColor.equalsIgnoreCase("yellow")) {
+			            yellowCount++;
+			        } else if(channelColor.equalsIgnoreCase("white")) {
+			            whiteCount++;
+			        } else if(channelColor.equalsIgnoreCase("NA")) {
+			            naCount++;
+			        }
+			    }
+			    
+			    // Check if all required core colors are present with correct counts
+			    StringBuilder errors = new StringBuilder();
+			    
+			    if(blueCount == 0) {
+			        errors.append("  - blue (DAPI/DNA) is missing\n");
+			    } else if(blueCount > 1) {
+			        errors.append("  - blue assigned ").append(blueCount).append(" times (must be exactly 1)\n");
+			    }
+			    
+			    if(greenCount == 0) {
+			        errors.append("  - green (Protein of Interest) is missing\n");
+			    }
+			    // Note: green can be > 1
+			    
+			    if(redCount == 0) {
+			        errors.append("  - red (MT/Cilia) is missing\n");
+			    } else if(redCount > 1) {
+			        errors.append("  - red assigned ").append(redCount).append(" times (must be exactly 1)\n");
+			    }
+			    
+			    if(yellowCount == 0) {
+			        errors.append("  - yellow (ER/BB) is missing\n");
+			    } else if(yellowCount > 1) {
+			        errors.append("  - yellow assigned ").append(yellowCount).append(" times (must be exactly 1)\n");
+			    }
+			    
+			    if(whiteCount > 1) {
+			        errors.append("  - white assigned ").append(whiteCount).append(" times (max: 1)\n");
+			    }
+			    
+			 // Show errors if any
+			    if(errors.length() > 0) {
+			        leave = false;
+			        
+			        String greenNote = "";
+			        if(greenCount > 1) {
+			            greenNote = "\nNOTE: Green is assigned " + greenCount + " times, which is allowed.\n";
+			        }
+			        
+			        GenericDialog errorDialog = new GenericDialog("ERROR: Invalid Channel Assignment");
+			        errorDialog.addMessage("Channel assignment requirements:\n" +
+			            "- blue, red, yellow: exactly 1 each\n" +
+			            "- green: at least 1 (duplicates allowed for special cases like sperm data)\n" +
+			            "- white: 0 or 1 (optional)\n\n" +
+			            "Problems detected:\n" + errors.toString() + 
+			            greenNote + 
+			            "\nClick OK to fix channel assignments", TextFont);
+			        errorDialog.addHelp(PLUGINGITHUBURL);
+			        errorDialog.showDialog();
+			    } else if(greenCount > 1) {
+			        // All validations passed, but green is duplicated - show info message
+			        GenericDialog infoDialog = new GenericDialog("INFO: Duplicate Green Channel Detected");
+			        infoDialog.addMessage("You have assigned green to " + greenCount + " channels.\n\n" +
+			            "IMPORTANT: Before uploading to LIMS, you MUST run:\n" +
+			            "HPA_LIMS_Channel_Selector\n\n" +
+			            "Available at:\n" +
+			            "https://github.com/CellProfiling/HPA_LIMS_Channel_Selector/\n\n" +
+			            "This tool allows you to specify which green channel\n" +
+			            "should be used as the primary channel for LIMS.\n\n" +
+			            "Click OK to continue processing", TextFont);
+			        infoDialog.addHelp(PLUGINGITHUBURL);
+			        infoDialog.showDialog();
+			    }
+			}			
+
+			// Check for dangerous output folder names
+			if(leave) {
+				String folderName = new File(outPath).getName();
+				// Check if folder matches LIMS import pattern: if followed by 4 digits
+				if(folderName.matches("(?i)if\\d{4}.*")) {
+					leave = false;
+					new WaitForUserDialog("WARNING: Dangerous Output Folder Name!\n\n" +
+						"The output folder is named: " + folderName + "\n\n" +
+						"This matches LIMS auto-import pattern (if####).\n" +
+						"LIMS may start importing incomplete data while the plugin is still running!\n\n" +
+						"Recommended actions:\n" +
+						"1. Use a different folder name during export (e.g., 'ifxx##')\n" +
+						"2. Rename to 'if####' AFTER processing is complete\n\n" +
+						"Click OK to change the folder name, or Cancel to proceed anyway.").show();
+				}
+			}
+
+			// Verify output folder is writable
+			if(leave) {
+				File outDir = new File(outPath);
+				if(!outDir.canWrite()) {
+					leave = false;
+					new WaitForUserDialog("WARNING: Output Folder Not Writable\n\n" +
+						"Cannot write to: " + outPath + "\n\n" +
+						"Possible causes:\n" +
+						"- No write permissions\n" +
+						"- Folder is read-only\n" +
+						"- Network drive is disconnected\n\n" +
+						"Please select a different folder or fix permissions.").show();
+				}
+			}
+			
+			// Check if output folder contains existing files
+			if(leave) {
+				File outDir = new File(outPath);
+				if(outDir.exists() && outDir.isDirectory()) {
+					File[] existingFiles = outDir.listFiles();
+					if(existingFiles != null && existingFiles.length > 0) {
+						// Count non-hidden files/folders
+						int visibleItems = 0;
+						for(File f : existingFiles) {
+							if(!f.isHidden() && !f.getName().startsWith(".")) {
+								visibleItems++;
+							}
+						}
+						
+						if(visibleItems > 0) {
+							GenericDialog warningDialog = new GenericDialog("Warning: Output Folder Not Empty");
+							warningDialog.addMessage("The output folder contains " + visibleItems + " existing item(s):\n" +
+								outPath + "\n\n" +
+								"Files with identical names WILL BE OVERWRITTEN without warning!\n\n" +
+								"Recommended actions:\n" +
+								"1. Switch to using an empty folder (safest)\n" +
+								"OR\n" +
+								"2. Make sure the file does not contain matching file names to avoid override\n" +
+								"Do you want to continue anyway?", TextFont);
+							warningDialog.setOKLabel("Continue Anyway");
+							warningDialog.setCancelLabel("Change Folder");
+							warningDialog.showDialog();
+							
+							if(warningDialog.wasCanceled()) {
+								leave = false;
+							}
+						}
+					}
+				}
+			}
 			
 			if(leave) {
+				// Save preferences for next time
+				ij.Prefs.set("HPA_Sp8Convert.outPath", outPath);
+				ij.Prefs.set("HPA_Sp8Convert.channel0", selectedChannelType[0]);
+				ij.Prefs.set("HPA_Sp8Convert.channel1", selectedChannelType[1]);
+				ij.Prefs.set("HPA_Sp8Convert.channel2", selectedChannelType[2]);
+				ij.Prefs.set("HPA_Sp8Convert.channel3", selectedChannelType[3]);
+				ij.Prefs.set("HPA_Sp8Convert.channel4", selectedChannelType[4]);
+				ij.Prefs.set("HPA_Sp8Convert.logXML", logXMLProcessing);
+				ij.Prefs.set("HPA_Sp8Convert.logOriginal", logDetectedOriginalMetadata);
+				ij.Prefs.set("HPA_Sp8Convert.logWholeXML", logWholeOMEXMLComments);
+
 				break;
 			}
 		}
+		
+		// Show configuration summary before processing
+		StringBuilder summary = new StringBuilder();
+		summary.append("Configuration Summary:\n\n");
+		summary.append("Output folder: ").append(outPath).append("\n\n");
+		summary.append("Channel mapping:\n");
+		for(int ch = 0; ch < selectedChannelType.length; ch++) {
+			summary.append("  Ch").append(ch).append(" → ").append(selectedChannelType[ch]).append("\n");
+		}
+		summary.append("\nLogging: ");
+		if(logXMLProcessing || logDetectedOriginalMetadata || logWholeOMEXMLComments) {
+			summary.append("Enabled");
+		} else {
+			summary.append("Disabled");
+		}
+		summary.append("\n\nClick OK to select input folders, or Cancel to abort.");
+
+		GenericDialog confirmDialog = new GenericDialog("Confirm Settings");
+		confirmDialog.addMessage(summary.toString(), TextFont);
+		confirmDialog.showDialog();
+		if(confirmDialog.wasCanceled()) return;
 		
 		
 		// &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -297,7 +528,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					if (fileList[f].equals("Metadata")) {
 						continue;
 					}
-					File fi = new File(od.filesToOpen.get(task).getAbsolutePath() + System.getProperty("file.separator") + fileList[f]);
+					File fi = new File(od.filesToOpen.get(task).getAbsolutePath() + FILESEP + fileList[f]);
 					if(fi.isDirectory()) {
 						od.filesToOpen.add(fi);
 						tasks = od.filesToOpen.size();
@@ -371,12 +602,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						 */
 //						for (int ff = 0; ff < folderFiles.size(); ff++) {
 //							if (folderFiles.get(ff).equals(od.filesToOpen.get(task).getAbsolutePath()
-//									+ System.getProperty("file.separator") + tempFile)) {
+//									+ FILESEP + tempFile)) {
 //								continue scanningFilenames;
 //							}
 //						}
 						folderFiles.add(od.filesToOpen.get(task).getAbsolutePath()
-								+ System.getProperty("file.separator") + tempFile);
+								+ FILESEP + tempFile);
 						if(logWholeOMEXMLComments || logXMLProcessing || logDetectedOriginalMetadata) {
 							IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
 						}
@@ -403,27 +634,27 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				fullPath[task] = tempFile;
 				
 				//Getting series name
-				series[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
+				series[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1);
 				if (tempFile.contains("_z")) {	//raw tif output: _z, xlef data: --Z
 					series[task] = series[task].substring(0, series[task].toLowerCase().lastIndexOf("_z"));
 				} else if (tempFile.contains("--Z")) {
 					series[task] = series[task].substring(0, series[task].toLowerCase().lastIndexOf("--z"));
 				}
 				
-				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
-				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
-				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
-				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + name[task];
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP));
+				name[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1);
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP));
+				name[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1) + name[task];
 				
 				if(tempFile.contains("TileScan")) {
-					tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
-					name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + " " + name[task];
+					tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP));
+					name[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1) + " " + name[task];
 					
-					tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
-					name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1) + " " + name[task];					
+					tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP));
+					name[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1) + " " + name[task];					
 				}
 				
-				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP) + 1);
 				dir[task] = tempFile;
 
 				if(logWholeOMEXMLComments || logXMLProcessing || logDetectedOriginalMetadata) {
@@ -523,12 +754,12 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						 */
 						for (int ff = 0; ff < folderFiles.size(); ff++) {
 							if (folderFiles.get(ff).equals(od.filesToOpen.get(task).getAbsolutePath()
-									+ System.getProperty("file.separator") + tempFile)) {
+									+ FILESEP + tempFile)) {
 								continue scanningFilenames;
 							}
 						}
 						folderFiles.add(od.filesToOpen.get(task).getAbsolutePath()
-								+ System.getProperty("file.separator") + tempFile);
+								+ FILESEP + tempFile);
 						IJ.log("ACCEPTED: " + folderFiles.get(folderFiles.size() - 1));
 					}
 				}
@@ -551,10 +782,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			for (int task = 0; task < allFiles.size(); task++) {
 				tempFile = allFiles.get(task);
 				fullPath[task] = tempFile;
-				series[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
-				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")));
-				name[task] = tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
-				tempFile = tempFile.substring(0, tempFile.lastIndexOf(System.getProperty("file.separator")) + 1);
+				series[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1);
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP));
+				name[task] = tempFile.substring(tempFile.lastIndexOf(FILESEP) + 1);
+				tempFile = tempFile.substring(0, tempFile.lastIndexOf(FILESEP) + 1);
 				dir[task] = tempFile;
 
 				IJ.log("ORIGINAL: " + allFiles.get(task));
@@ -575,6 +806,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		progress = new ProgressDialog(name, series);
 		progress.setLocation(0, 0);
 		progress.setVisible(true);
+		progress.startTiming();
 		progress.addWindowListener(new java.awt.event.WindowAdapter() {
 			public void windowClosing(WindowEvent winEvt) {
 				if (processingDone == false) {
@@ -591,7 +823,6 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 
 		for (int task = 0; task < tasks; task++) {
 			running: while (continueProcessing) {
-				Date startDate = new Date();
 				progress.updateBarText("in progress...");
 
 				if(loadLif){
@@ -600,7 +831,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					 * */
 					// Conversion via OME - Note this is buggy for Leica Lif files still in the OME library and thus, does not work for now!
 					try {
-						convertToOMETif(dir[task] + "" + System.getProperty("file.separator") + name[task]);
+						convertToOMETif(dir[task] + "" + FILESEP + name[task]);
 						
 					} catch (Exception e) {
 						String out = "";
@@ -718,6 +949,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		IJ.log("New comment =");
 		IJ.log(comment);
 	}
+	
 
 	String readFileAsOneString(File path) throws FileNotFoundException {
 		FileReader fr = new FileReader(path);
@@ -743,18 +975,23 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		}
 		return collectedString;
 	}
+	
+	
 
 	/**
 	 * This function is still a draft and thus 
 	 * @deprecated
 	 * */
 	void convertToOMETif(String id) throws Exception {
+		//INITIALIZE
+	    final String FILESEP = System.getProperty("file.separator");
+		
 		ImageReader reader = new ImageReader();
 		OMETiffWriter writer = new OMETiffWriter();
 
 		int dot = id.lastIndexOf(".");
 		String outId = (dot >= 0 ? id.substring(0, dot) : id) + "";
-		progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "...");
+		progress.updateBarText("Converting " + id.substring(id.lastIndexOf(FILESEP)+1) + "...");
 
 		// record metadata to OME-XML format
 		ServiceFactory factory = new ServiceFactory();
@@ -850,14 +1087,14 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				}			
 				
 				//Saving file
-				outFilePath = outId + tempTxt + ZTxt + System.getProperty("file.separator") 
-					+ outId.substring(outId.lastIndexOf(System.getProperty("file.separator"))+1) + tempTxt + ZTxt + CTxt + ".ome.tif";				
+				outFilePath = outId + tempTxt + ZTxt + FILESEP 
+					+ outId.substring(outId.lastIndexOf(FILESEP)+1) + tempTxt + ZTxt + CTxt + ".ome.tif";				
 				savedFilePaths.add(outFilePath+"");				
 				writer.setId(outFilePath);
 				// write plane to output file
 				writer.saveBytes(p, plane);
 			}
-			progress.updateBarText("Converting " + id.substring(id.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
+			progress.updateBarText("Converting " + id.substring(id.lastIndexOf(FILESEP)+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
 		}
 		progress.updateBarText("Converted - closing metadata writer...");
 		writer.close();
@@ -866,7 +1103,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		
 		for(int f = 0; f < savedFilePaths.size(); f++) {
 			progress.setBar(0.4+(0.4*f/(double)savedFilePaths.size()));
-			progress.updateBarText("Cleaning XML " + savedFilePaths.get(f).substring(savedFilePaths.get(f).lastIndexOf(System.getProperty("file.separator"))+1) + "...");
+			progress.updateBarText("Cleaning XML " + savedFilePaths.get(f).substring(savedFilePaths.get(f).lastIndexOf(FILESEP)+1) + "...");
 			if(id.substring(id.lastIndexOf(".")).equals(".lif")) {
 				progress.notifyMessage("Clean lif based xml", ProgressDialog.ERROR);				
 				cleanUpOmeTifFromLifXmlString(savedFilePaths.get(f), false, true);
@@ -887,6 +1124,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	 * @deprecated
 	 * */
 	void cleanUpOmeTifFromLifXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
+		//INITIALIZE
+	    final String FILESEP = System.getProperty("file.separator");
+		
 		// read comment
 		progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
 		progress.updateBarText("Reading " + file + " ");
@@ -999,8 +1239,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										if(extendedLogging) progress.notifyMessage("Found uuidNode " + cc + " - UUID: " + grandChildNodes.item(cc).getTextContent(),ProgressDialog.LOG);
 										if(extendedLogging) progress.notifyMessage("Noted FileName for UUID: " + grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue(),ProgressDialog.LOG);	
 										
-										if(extendedLogging) progress.notifyMessage("Does it match to " + file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1) + "?",ProgressDialog.LOG);	
-										if(grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue().equals(file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1))) {
+										if(extendedLogging) progress.notifyMessage("Does it match to " + file.substring(file.lastIndexOf(FILESEP)+1) + "?",ProgressDialog.LOG);	
+										if(grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue().equals(file.substring(file.lastIndexOf(FILESEP)+1))) {
 											if(extendedLogging) progress.notifyMessage("YES!",ProgressDialog.LOG);
 											imageID = nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue();
 											imageName = nodeList.item(n).getAttributes().getNamedItem("Name").getNodeValue();
@@ -1231,6 +1471,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	 * @deprecated
 	 * */
 	void cleanUpOmeTifFromXlefXmlString(String file, boolean logWholeComments, boolean extendedLogging) throws IOException, FormatException {
+		//INITIALIZE
+	    final String FILESEP = System.getProperty("file.separator");
+		
 		// read comment
 		progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
 		progress.updateBarText("Reading " + file + " ");
@@ -1342,8 +1585,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										if(extendedLogging) progress.notifyMessage("Found uuidNode " + cc + " - UUID: " + grandChildNodes.item(cc).getTextContent(),ProgressDialog.LOG);
 										if(extendedLogging) progress.notifyMessage("Noted FileName for UUID: " + grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue(),ProgressDialog.LOG);	
 										
-										if(extendedLogging) progress.notifyMessage("Does it match to " + file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1) + "?",ProgressDialog.LOG);	
-										if(grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue().equals(file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1))) {
+										if(extendedLogging) progress.notifyMessage("Does it match to " + file.substring(file.lastIndexOf(FILESEP)+1) + "?",ProgressDialog.LOG);	
+										if(grandChildNodes.item(cc).getAttributes().getNamedItem("FileName").getNodeValue().equals(file.substring(file.lastIndexOf(FILESEP)+1))) {
 											if(extendedLogging) progress.notifyMessage("YES!",ProgressDialog.LOG);
 											imageID = nodeList.item(n).getAttributes().getNamedItem("ID").getNodeValue();
 											imageName = nodeList.item(n).getAttributes().getNamedItem("Name").getNodeValue();
@@ -1573,6 +1816,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	 * @deprecated
 	 * */
 	boolean importingFromFolderStructureXLEF(String directory, String filename, String series, int task, boolean extendedLogging) {
+		//INITIALIZE
+	    final String FILESEP = System.getProperty("file.separator");
+		
 		/**
 		 * Finding the metadata
 		 */
@@ -1584,8 +1830,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 			searchMetadata: while(true) {
 				metadataFolderName = "Metadata";
 				
-				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
-						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+				metaDataFile = new File(directory + FILESEP + filename
+						+ FILESEP + metadataFolderName + FILESEP
 						+ series + ".xml");
 				
 				if (metaDataFile.exists()) {
@@ -1593,8 +1839,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					break searchMetadata;
 				}
 				
-				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
-						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+				metaDataFile = new File(directory + FILESEP + filename
+						+ FILESEP + metadataFolderName + FILESEP
 						+ series + ".xlif");
 					
 				if (metaDataFile.exists()) {
@@ -1604,8 +1850,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 				
 				metadataFolderName = "MetaData";
 				
-				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
-						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+				metaDataFile = new File(directory + FILESEP + filename
+						+ FILESEP + metadataFolderName + FILESEP
 						+ series + ".xml");
 				
 				if (metaDataFile.exists()) {
@@ -1613,8 +1859,8 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 					break searchMetadata;
 				}
 				
-				metaDataFile = new File(directory + System.getProperty("file.separator") + filename
-						+ System.getProperty("file.separator") + metadataFolderName + System.getProperty("file.separator")
+				metaDataFile = new File(directory + FILESEP + filename
+						+ FILESEP + metadataFolderName + FILESEP
 						+ series + ".xlif");
 					
 				if (metaDataFile.exists()) {
@@ -1693,7 +1939,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 		 */
 		{
 			// Get all files in the folder
-			String[] fileList = new File(directory + "" + System.getProperty("file.separator") + filename)
+			String[] fileList = new File(directory + "" + FILESEP + filename)
 					.list();
 			String tempFile, slice, channel;
 			ImagePlus imp;
@@ -1737,10 +1983,10 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						ImageReader reader = new ImageReader();
 						OMETiffWriter writer = new OMETiffWriter();
 	
-						String inId = directory + "" + System.getProperty("file.separator") + filename
-										+ System.getProperty("file.separator") + tempFile;
+						String inId = directory + "" + FILESEP + filename
+										+ FILESEP + tempFile;
 																	
-						if(extendedLogging) progress.updateBarText("Converting " + tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator"))+1) + "...");
+						if(extendedLogging) progress.updateBarText("Converting " + tempFile.substring(tempFile.lastIndexOf(FILESEP)+1) + "...");
 						if(extendedLogging) progress.notifyMessage("Filepath " + inId,ProgressDialog.LOG);
 	
 						// record metadata to OME-XML format
@@ -1760,11 +2006,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 						int seriesCount = reader.getSeriesCount();
 						int planeCounts [] = new int [seriesCount];
 						
-						LinkedList <String> savedFilePaths = new LinkedList <String>();
-						String tempTxt, ZTxt, CTxt;
-						String outFilePath;
-						
-						File fileDir;	
+						String outFilePath;						
 						for (int s = 0; s < seriesCount; s++) {
 							progress.setBar(s/seriesCount*0.4);
 							reader.setSeries(s);
@@ -1783,9 +2025,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 										tempFile.toLowerCase().lastIndexOf("_ch") + 5);
 								if(extendedLogging) progress.notifyMessage("Z " + slice + " - C " + channel,ProgressDialog.LOG);
 
-								new File(outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator"))
+								new File(outPath + filename + "_" + series + "_Z" + slice + FILESEP)
 										.mkdir();
-								outFilePath = outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator") 
+								outFilePath = outPath + filename + "_" + series + "_Z" + slice + FILESEP 
 									+ series + "_Z" + slice + "_C" + channel + ".ome.tif";
 								
 								//Saving file
@@ -1793,7 +2035,7 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								// write plane to output file
 								writer.saveBytes(p, plane);
 							}
-							progress.updateBarText("Converting " + tempFile.substring(tempFile.lastIndexOf(System.getProperty("file.separator"))+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
+							progress.updateBarText("Converting " + tempFile.substring(tempFile.lastIndexOf(FILESEP)+1) + "... (" + (s+1) + "/" + seriesCount+" done)");
 						}
 						progress.updateBarText("Converted - closing metadata writer...");
 						writer.close();
@@ -1810,19 +2052,15 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								ProgressDialog.ERROR);
 						return false;
 					}
-					
-					
-					
-					
-					
+										
 					
 					// Now open the file and save it as an OME-Tiff
 					boolean goon = false;
 					if(goon) {
-						if(extendedLogging) progress.notifyMessage("Open " + directory + "" + System.getProperty("file.separator") + filename
-								+ System.getProperty("file.separator") + tempFile,ProgressDialog.LOG);
-						imp = IJ.openImage(directory + "" + System.getProperty("file.separator") + filename
-								+ System.getProperty("file.separator") + tempFile);
+						if(extendedLogging) progress.notifyMessage("Open " + directory + "" + FILESEP + filename
+								+ FILESEP + tempFile,ProgressDialog.LOG);
+						imp = IJ.openImage(directory + "" + FILESEP + filename
+								+ FILESEP + tempFile);
 											
 						slice = tempFile.substring(tempFile.toLowerCase().lastIndexOf("_z") + 2,
 								tempFile.toLowerCase().lastIndexOf("_z") + 4);
@@ -1830,9 +2068,9 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 								tempFile.toLowerCase().lastIndexOf("_ch") + 5);
 						if(extendedLogging) progress.notifyMessage("Z " + slice + " - C " + channel,ProgressDialog.LOG);
 
-						new File(outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator"))
+						new File(outPath + filename + "_" + series + "_Z" + slice + FILESEP)
 								.mkdir();
-						String outfilepath = outPath + filename + "_" + series + "_Z" + slice + System.getProperty("file.separator") 
+						String outfilepath = outPath + filename + "_" + series + "_Z" + slice + FILESEP 
 							+ series + "_Z" + slice + "_C" + channel + ".ome.tif";
 										
 						IJ.saveAs(imp, "Tiff", outfilepath);
@@ -1931,43 +2169,46 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 	}
 
 	void extendOMETiffCommentWithMetadataXML(String file, String name, int task, boolean logWholeComments, boolean extendedLogging, boolean logOriginalMetadata) throws IOException, FormatException, ServiceException, DependencyException {
-			// read comment
-			if(extendedLogging)	progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
-			
-			progress.updateBarText("Reading " + file + " ");
-			
-			/**
-			 * In the OME Tiff output from the 3D viewer it will generate a folder for each well and then put the multiple positions recorded there (e.g., R1, R2, R3, R4) 
-			 * These positions are also in the filenames (Example file name "R2_z00_ch0.ome.tif")
-			 * In the folder for each well there is also a "MetaData" folder with xml files. For each position (e.g., R2), there is:
-			 * 		R2.ome.xml
-			 * 		R2.ome_properties.xml
-			 * 		R2.ome_properties.xsl
-			 * We need to read R2.ome.xml and transfer the metadata from there
-			 * */
-			String positionName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
-			if(positionName.contains("_z")) {
-				// z stack recording
-				positionName = positionName.substring(0,positionName.lastIndexOf("_z"));
-			}else {
-				// single plane recording
-				positionName = positionName.substring(0,positionName.lastIndexOf("_ch"));
-			}
-			
-			String metadataFilePath = file.substring(0,file.lastIndexOf(System.getProperty("file.separator"))+1) 
-					+ "MetaData" + System.getProperty("file.separator") 
-					+ positionName + ".ome.xml";
-			
-			if(extendedLogging)	progress.notifyMessage("Series name: " + positionName + "", ProgressDialog.LOG);
-			if(extendedLogging)	progress.notifyMessage("Metadata file path: " + metadataFilePath + "", ProgressDialog.LOG);
-			
-			/**
-			 * Import the XML file and generate document to read from it
-			 */
-			Document metaDoc = null;
+		//INITIALIZE
+	    final String FILESEP = System.getProperty("file.separator");
+		
+	    // read comment
+		if(extendedLogging)	progress.notifyMessage("Reading " + file + " ", ProgressDialog.LOG);
+		
+		progress.updateBarText("Reading " + file + " ");
+		
+		/**
+		 * In the OME Tiff output from the 3D viewer it will generate a folder for each well and then put the multiple positions recorded there (e.g., R1, R2, R3, R4) 
+		 * These positions are also in the filenames (Example file name "R2_z00_ch0.ome.tif")
+		 * In the folder for each well there is also a "MetaData" folder with xml files. For each position (e.g., R2), there is:
+		 * 		R2.ome.xml
+		 * 		R2.ome_properties.xml
+		 * 		R2.ome_properties.xsl
+		 * We need to read R2.ome.xml and transfer the metadata from there
+		 * */
+		String positionName = file.substring(file.lastIndexOf(FILESEP)+1);
+		if(positionName.contains("_z")) {
+			// z stack recording
+			positionName = positionName.substring(0,positionName.lastIndexOf("_z"));
+		}else {
+			// single plane recording
+			positionName = positionName.substring(0,positionName.lastIndexOf("_ch"));
+		}
+		
+		String metadataFilePath = file.substring(0,file.lastIndexOf(FILESEP)+1) 
+				+ "MetaData" + FILESEP 
+				+ positionName + ".ome.xml";
+		
+		if(extendedLogging)	progress.notifyMessage("Series name: " + positionName + "", ProgressDialog.LOG);
+		if(extendedLogging)	progress.notifyMessage("Metadata file path: " + metadataFilePath + "", ProgressDialog.LOG);
+		
+		/**
+		 * Import the XML file and generate document to read from it
+		 */
+		Document metaDoc = null;
 //			String metaDataXMLString = "";
-			File metaDataFile = new File(metadataFilePath);
-			{
+		File metaDataFile = new File(metadataFilePath);
+		{
 //				try {
 //					metaDataXMLString = this.readFileAsOneString(metaDataFile);
 //				} catch (FileNotFoundException e1) {
@@ -1985,25 +2226,25 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //					return;
 //				}
 
-				try {
-					DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-					DocumentBuilder db = dbf.newDocumentBuilder();
-					metaDoc = db.parse(metaDataFile);
-					metaDoc.getDocumentElement().normalize();
-				} catch (SAXException | IOException | ParserConfigurationException e) {
-					String out = "";
-					for (int err = 0; err < e.getStackTrace().length; err++) {
-						out += " \n " + e.getStackTrace()[err].toString();
-					}
-					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process metadata file " + metadataFilePath 
-							+ "\nError message: " + e.getMessage()
-							+ "\nError localized message: " + e.getLocalizedMessage()
-							+ "\nError cause: " + e.getCause() 
-							+ "\nDetailed message:"
-							+ "\n" + out,
-							ProgressDialog.ERROR);
-					return;
+			try {
+				DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+				DocumentBuilder db = dbf.newDocumentBuilder();
+				metaDoc = db.parse(metaDataFile);
+				metaDoc.getDocumentElement().normalize();
+			} catch (SAXException | IOException | ParserConfigurationException e) {
+				String out = "";
+				for (int err = 0; err < e.getStackTrace().length; err++) {
+					out += " \n " + e.getStackTrace()[err].toString();
 				}
+				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Could not process metadata file " + metadataFilePath 
+						+ "\nError message: " + e.getMessage()
+						+ "\nError localized message: " + e.getLocalizedMessage()
+						+ "\nError cause: " + e.getCause() 
+						+ "\nDetailed message:"
+						+ "\n" + out,
+						ProgressDialog.ERROR);
+				return;
+			}
 
 //				NodeList nodeList = metaDoc.getElementsByTagName("ATLConfocalSettingDefinition");
 //				for (int n = 0; n < nodeList.getLength(); n++) {
@@ -2022,50 +2263,50 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //					}
 ////					progress.notifyMessage("Task " + (task+1) + "/" + tasks + ": Node " + (n+1) + " Content: " + nodeList.item(n).getFeature("Name", ""), ProgressDialog.LOG);
 //				}
-			}
+		}
+		
+		/**
+		 * Open the tif file, extract the tif comment (= OME XML String) to modify it.
+		 * */
+		
+		String comment = new TiffParser(file).getComment();
+		// or if you already have the file open for random access, you can use:
+		// RandomAccessInputStream fin = new RandomAccessInputStream(f);
+		// TiffParser tiffParser = new TiffParser(fin);
+		// String comment = tiffParser.getComment();
+		// fin.close();
+		progress.updateBarText("Reading " + file + " done!");
+		// display comment, and prompt for changes
+		if(logWholeComments) {
+			progress.notifyMessage("Original comment:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
 			
-			/**
-			 * Open the tif file, extract the tif comment (= OME XML String) to modify it.
-			 * */
-			
-			String comment = new TiffParser(file).getComment();
-			// or if you already have the file open for random access, you can use:
-			// RandomAccessInputStream fin = new RandomAccessInputStream(f);
-			// TiffParser tiffParser = new TiffParser(fin);
-			// String comment = tiffParser.getComment();
-			// fin.close();
-			progress.updateBarText("Reading " + file + " done!");
-			// display comment, and prompt for changes
-			if(logWholeComments) {
-				progress.notifyMessage("Original comment:", ProgressDialog.LOG);
-				progress.notifyMessage(comment, ProgressDialog.LOG);
+		}
+		
+		
+		/**
+		 * Generate a MetadatStore
+		 * */
+		ServiceFactory factory = new ServiceFactory();
+		OMEXMLService service = factory.getInstance(OMEXMLService.class);
+		OMEXMLMetadata meta = service.createOMEXMLMetadata(comment);
+					
+		/**
+		 * Add original metadata
+		 * */
+		NodeList tempNodes = metaDoc.getElementsByTagName("Attachment");
+		Node attachmentHardwareSettings = null;
+		NamedNodeMap attributes;
+		for(int n = 0; n < tempNodes.getLength(); n++){
+			if(tempNodes.item(n).getAttributes().getNamedItem("Name").getNodeValue().equals("HardwareSetting")) {
+				attachmentHardwareSettings = tempNodes.item(n);
+				attributes = tempNodes.item(n).getAttributes();
+				for(int a = 0; a < attributes.getLength(); a++) {
+					service.populateOriginalMetadata(meta, positionName + " " + "HardwareSetting|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+				}
 				
-			}
-			
-			
-			/**
-			 * Generate a MetadatStore
-			 * */
-			ServiceFactory factory = new ServiceFactory();
-			OMEXMLService service = factory.getInstance(OMEXMLService.class);
-			OMEXMLMetadata meta = service.createOMEXMLMetadata(comment);
-						
-			/**
-			 * Add original metadata
-			 * */
-			NodeList tempNodes = metaDoc.getElementsByTagName("Attachment");
-			Node attachmentHardwareSettings = null;
-			NamedNodeMap attributes;
-			for(int n = 0; n < tempNodes.getLength(); n++){
-				if(tempNodes.item(n).getAttributes().getNamedItem("Name").getNodeValue().equals("HardwareSetting")) {
-					attachmentHardwareSettings = tempNodes.item(n);
-					attributes = tempNodes.item(n).getAttributes();
-					for(int a = 0; a < attributes.getLength(); a++) {
-						service.populateOriginalMetadata(meta, positionName + " " + "HardwareSetting|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
-					}
-					
-					meta.setMicroscopeModel(tempNodes.item(n).getAttributes().getNamedItem("SystemTypeName").getNodeValue(), 0);
-					
+				meta.setMicroscopeModel(tempNodes.item(n).getAttributes().getNamedItem("SystemTypeName").getNodeValue(), 0);
+				
 //					NodeList tempNodes2 = tempNodes.item(n).getChildNodes();
 //					for(int cn = 0; cn < tempNodes2.getLength(); cn++) {
 //						if(tempNodes2.item(cn).getNodeName().equals("ATLConfocalSettingDefinition")){
@@ -2081,14 +2322,25 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //							}
 //						}
 //					}
-					break;
-				}
+				break;
 			}
-			
-			tempNodes = metaDoc.getElementsByTagName("*");
-									
-			if(logOriginalMetadata)	progress.notifyMessage("Number of detected xml elements: " + tempNodes.getLength(), ProgressDialog.LOG);
-			for(int n = 0; n < tempNodes.getLength(); n++){				 
+		}
+		
+		// === ADD CACHED NODE DEFINITIONS ===
+		// Cache frequently accessed nodes for performance
+		Node ATLConfocalSettingDefinitionNode = null;		
+		if (attachmentHardwareSettings != null) {
+			ATLConfocalSettingDefinitionNode = getFirstNodeWithName(
+				attachmentHardwareSettings.getChildNodes(),
+				"ATLConfocalSettingDefinition"
+			);
+		}
+		// === END CACHED NODE DEFINITIONS ===
+		
+		tempNodes = metaDoc.getElementsByTagName("*");
+								
+		if(logOriginalMetadata)	progress.notifyMessage("Number of detected xml elements: " + tempNodes.getLength(), ProgressDialog.LOG);
+		for(int n = 0; n < tempNodes.getLength(); n++){				 
 //				if(extendedLogging)	progress.notifyMessage(n + ": NameSpaceURI: " + tempNodes.item(n).getNamespaceURI(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Parent name: " + tempNodes.item(n).getParentNode().getNodeName(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Parent type: " + tempNodes.item(n).getParentNode().getNodeType(), ProgressDialog.LOG);
@@ -2096,706 +2348,743 @@ public class ConvertSp8ToOMETif_Main implements PlugIn {
 //				if(extendedLogging)	progress.notifyMessage(n + ": Name: " + tempNodes.item(n).getNodeName(), ProgressDialog.LOG);
 //				if(extendedLogging)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
 
-				Node tempNode = tempNodes.item(n);
-				String tempXPath = getNumberedNodeName(tempNode);
-												
-				boolean valid = false;
-				while(!tempNode.equals(null)) {
-					tempNode = tempNode.getParentNode();
-					if(tempNode.getNodeName().equals("#document") || tempNode.equals(null)) {
-						break;
-					}else if(tempNode.getNodeName().equals("Image")){
-						if(tempXPath.startsWith("ImageDescription")) {
-							valid = true;							
-						}
-						break;
-					}else if(tempNode.getNodeName().equals("Attachment")) {						
-						String [] tempAttributes = { "TileScanInfo", "ViewerScaling", "HardwareSetting"};
-						for (String attribute : tempAttributes) {
-						    if (tempNode.getAttributes().getNamedItem("Name").getNodeValue().equals(attribute)) {
-						    	valid = true;						    	
-						        tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
-						        break;
-						    }
-						}
-						break;
-					}					
-					tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
-				}
-				if(valid) {
-					if(logOriginalMetadata)	progress.notifyMessage(n + ": XPATH: " + tempXPath, ProgressDialog.LOG);
-					if(logOriginalMetadata)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
-					if(tempNodes.item(n).getNodeValue() != null) {
-						if(logOriginalMetadata) progress.notifyMessage("ACCEPTED BECAUSE VALUE NOT NULL", ProgressDialog.LOG);						
-						service.populateOriginalMetadata(meta, positionName + " " + tempXPath, tempNodes.item(n).getNodeValue());
+			Node tempNode = tempNodes.item(n);
+			String tempXPath = getNumberedNodeName(tempNode);
+											
+			boolean valid = false;
+			while(!tempNode.equals(null)) {
+				tempNode = tempNode.getParentNode();
+				if(tempNode.getNodeName().equals("#document") || tempNode.equals(null)) {
+					break;
+				}else if(tempNode.getNodeName().equals("Image")){
+					if(tempXPath.startsWith("ImageDescription")) {
+						valid = true;							
 					}
-					if(tempNodes.item(n).hasAttributes()) {
-						attributes = tempNodes.item(n).getAttributes();
-						for(int a = 0; a < attributes.getLength(); a++) {
-							if(logOriginalMetadata)	progress.notifyMessage(n + ": Found attribute: " + tempXPath + "|" + attributes.item(a).getNodeName() + ": " + attributes.item(a).getNodeValue(), ProgressDialog.LOG);
-							service.populateOriginalMetadata(meta, positionName + " " + tempXPath + "|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
-						}						
-					}					
-				}else {
-					if(logOriginalMetadata)	progress.notifyMessage(n + ": Declined XPATH: " + tempXPath, ProgressDialog.LOG);					
-				}
+					break;
+				}else if(tempNode.getNodeName().equals("Attachment")) {						
+					String [] tempAttributes = { "TileScanInfo", "ViewerScaling", "HardwareSetting"};
+					for (String attribute : tempAttributes) {
+					    if (tempNode.getAttributes().getNamedItem("Name").getNodeValue().equals(attribute)) {
+					    	valid = true;						    	
+					        tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
+					        break;
+					    }
+					}
+					break;
+				}					
+				tempXPath = getNumberedNodeName(tempNode) + "|" + tempXPath;
 			}
-			
-
-			/**
-			 * Verify that x and y position match
-			 * This was modified for version v0.1.0 to ensure that files from manual recording can be read, fixing issue #2.
-			 * */			
-			Double xmlPosX, xmlPosY; 
-			try {			
-				xmlPosX = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue()); 
-				xmlPosY = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue()); 
-				
-				if(extendedLogging) {
-					progress.notifyMessage("XML PosX: " + xmlPosX, ProgressDialog.LOG);
-					progress.notifyMessage("XML PosY: " + xmlPosY, ProgressDialog.LOG);
+			if(valid) {
+				if(logOriginalMetadata)	progress.notifyMessage(n + ": XPATH: " + tempXPath, ProgressDialog.LOG);
+				if(logOriginalMetadata)	progress.notifyMessage(n + ": Value: " + tempNodes.item(n).getNodeValue(), ProgressDialog.LOG);
+				if(tempNodes.item(n).getNodeValue() != null) {
+					if(logOriginalMetadata) progress.notifyMessage("ACCEPTED BECAUSE VALUE NOT NULL", ProgressDialog.LOG);						
+					service.populateOriginalMetadata(meta, positionName + " " + tempXPath, tempNodes.item(n).getNodeValue());
 				}
-			}catch(NullPointerException e) {
-				// In this case it seems that the recording is from a manual and not a Tile Scan recording. 
-				// Thus we have to fetch the position from the ATLConfocalSettingsDefinition instead of from the Tile attributes
-				
-				Node tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
-				
-				xmlPosX = Double.parseDouble(tempNode.getAttributes().getNamedItem("StagePosX").getNodeValue()); 
-				xmlPosY = Double.parseDouble(tempNode.getAttributes().getNamedItem("StagePosY").getNodeValue());
-
-				if(extendedLogging) {
-					progress.notifyMessage("XML StagePosX: " + xmlPosX, ProgressDialog.LOG);
-					progress.notifyMessage("XML StagePosY: " + xmlPosY, ProgressDialog.LOG);
-				}				
+				if(tempNodes.item(n).hasAttributes()) {
+					attributes = tempNodes.item(n).getAttributes();
+					for(int a = 0; a < attributes.getLength(); a++) {
+						if(logOriginalMetadata)	progress.notifyMessage(n + ": Found attribute: " + tempXPath + "|" + attributes.item(a).getNodeName() + ": " + attributes.item(a).getNodeValue(), ProgressDialog.LOG);
+						service.populateOriginalMetadata(meta, positionName + " " + tempXPath + "|" + attributes.item(a).getNodeName(), attributes.item(a).getNodeValue());
+					}						
+				}					
+			}else {
+				if(logOriginalMetadata)	progress.notifyMessage(n + ": Declined XPATH: " + tempXPath, ProgressDialog.LOG);					
 			}
+		}
+		
+
+		/**
+		 * Verify that x and y position match
+		 * This was modified for version v0.1.0 to ensure that files from manual recording can be read, fixing issue #2.
+		 * */			
+		Double xmlPosX, xmlPosY; 
+		try {			
+			xmlPosX = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosX").getNodeValue()); 
+			xmlPosY = Double.parseDouble(metaDoc.getElementsByTagName("Tile").item(0).getAttributes().getNamedItem("PosY").getNodeValue()); 
 			
-					
-			for(int i = 0; i < meta.getPlaneCount(0); i++){
-				if(xmlPosX != meta.getPlanePositionX(0, i).value().doubleValue()) {
-					progress.notifyMessage("XML (" + xmlPosX + ") did not match OME metadata x position (" 
-							+ meta.getPlanePositionX(0, i).value() + " " + meta.getPlanePositionX(0, i).unit().getSymbol()
-							+ ")! Requires correction!",
-							ProgressDialog.NOTIFICATION);
-					
-					meta.setPlanePositionX(new Length(xmlPosX, UNITS.METER), 0, i);
-					
-					progress.notifyMessage("Have Resetted OME metadata to XML position! Checked set position: " 
-							+ meta.getPlanePositionX(0, i).value().doubleValue() 
-							+ " " + meta.getPlanePositionX(0, i).unit().getSymbol() + ".",
-							ProgressDialog.NOTIFICATION);
+			if(extendedLogging) {
+				progress.notifyMessage("XML PosX: " + xmlPosX, ProgressDialog.LOG);
+				progress.notifyMessage("XML PosY: " + xmlPosY, ProgressDialog.LOG);
+			}
+		}catch(NullPointerException e) {
+			// In this case it seems that the recording is from a manual and not a Tile Scan recording. 
+			// Thus we have to fetch the position from the ATLConfocalSettingsDefinition instead of from the Tile attributes
+			
+			Node tempNode = ATLConfocalSettingDefinitionNode;
+			
+			xmlPosX = Double.parseDouble(tempNode.getAttributes().getNamedItem("StagePosX").getNodeValue()); 
+			xmlPosY = Double.parseDouble(tempNode.getAttributes().getNamedItem("StagePosY").getNodeValue());
+
+			if(extendedLogging) {
+				progress.notifyMessage("XML StagePosX: " + xmlPosX, ProgressDialog.LOG);
+				progress.notifyMessage("XML StagePosY: " + xmlPosY, ProgressDialog.LOG);
+			}				
+		}
+		
+				
+		for(int i = 0; i < meta.getPlaneCount(0); i++){
+			if(xmlPosX != meta.getPlanePositionX(0, i).value().doubleValue()) {
+				progress.notifyMessage("XML (" + xmlPosX + ") did not match OME metadata x position (" 
+						+ meta.getPlanePositionX(0, i).value() + " " + meta.getPlanePositionX(0, i).unit().getSymbol()
+						+ ")! Requires correction!",
+						ProgressDialog.NOTIFICATION);
+				
+				meta.setPlanePositionX(new Length(xmlPosX, UNITS.METER), 0, i);
+				
+				progress.notifyMessage("Have Resetted OME metadata to XML position! Checked set position: " 
+						+ meta.getPlanePositionX(0, i).value().doubleValue() 
+						+ " " + meta.getPlanePositionX(0, i).unit().getSymbol() + ".",
+						ProgressDialog.NOTIFICATION);
 //					return;
-				}
-				if(xmlPosY != meta.getPlanePositionY(0, i).value().doubleValue()) {
-					progress.notifyMessage("XML (" + xmlPosY + ") did not match OME metadata y position (" 
-							+ meta.getPlanePositionY(0, i).value() + " " + meta.getPlanePositionY(0, i).unit().getSymbol()
-							+ ")! Requires correction!", ProgressDialog.NOTIFICATION);
-					
-					meta.setPlanePositionY(new Length(xmlPosY, UNITS.METER), 0, i);
-					
-					progress.notifyMessage("Have Resetted OME metadata to XML position! Checked set position: " 
-							+ meta.getPlanePositionY(0, i).value().doubleValue() 
-							+ " " + meta.getPlanePositionY(0, i).unit().getSymbol() + ".",
-							ProgressDialog.NOTIFICATION);
+			}
+			if(xmlPosY != meta.getPlanePositionY(0, i).value().doubleValue()) {
+				progress.notifyMessage("XML (" + xmlPosY + ") did not match OME metadata y position (" 
+						+ meta.getPlanePositionY(0, i).value() + " " + meta.getPlanePositionY(0, i).unit().getSymbol()
+						+ ")! Requires correction!", ProgressDialog.NOTIFICATION);
+				
+				meta.setPlanePositionY(new Length(xmlPosY, UNITS.METER), 0, i);
+				
+				progress.notifyMessage("Have Resetted OME metadata to XML position! Checked set position: " 
+						+ meta.getPlanePositionY(0, i).value().doubleValue() 
+						+ " " + meta.getPlanePositionY(0, i).unit().getSymbol() + ".",
+						ProgressDialog.NOTIFICATION);
 //					return;
-				}				
-			}
+			}				
+		}
+		
+		/**
+		 * Generate instrument in metadata
+		 * */
+		meta.setInstrumentID("Instrument:0", 0);
+		meta.setImageInstrumentRef("Instrument:0", 0);
+		
+		Node tempNode = ATLConfocalSettingDefinitionNode;
+		meta.setMicroscopeSerialNumber(tempNode.getAttributes().getNamedItem("SystemSerialNumber").getNodeValue(), 0);
+		
+		/**
+		 * Generate objective settings
+		 * */
+		{
+			meta.setMicroscopeType(MicroscopeType.INVERTED, 0);
 			
-			/**
-			 * Generate instrument in metadata
-			 * */
-			meta.setInstrumentID("Instrument:0", 0);
-			meta.setImageInstrumentRef("Instrument:0", 0);
+			//Get objective ID from master Confocal Setting Definition
+			tempNode = ATLConfocalSettingDefinitionNode;
 			
-			Node tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
-			meta.setMicroscopeSerialNumber(tempNode.getAttributes().getNamedItem("SystemSerialNumber").getNodeValue(), 0);
+			meta.setObjectiveID("Objective:0", 0, 0);			
+			meta.setObjectiveModel(tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), 0, 0);
 			
-			/**
-			 * Generate objective settings
-			 * */
-			{
-				meta.setMicroscopeType(MicroscopeType.INVERTED, 0);
-				
-				//Get objective ID from master Confocal Setting Definition
-				tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"ATLConfocalSettingDefinition");
-				
-				meta.setObjectiveID("Objective:0", 0, 0);			
-				meta.setObjectiveModel(tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), 0, 0);
-				
-				if(extendedLogging)	progress.notifyMessage("Generating objective setting for : " + tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), ProgressDialog.LOG);
-				
-				meta.setObjectiveNominalMagnification(Double.parseDouble(tempNode.getAttributes().getNamedItem("Magnification").getNodeValue()), 0, 0);
-				meta.setObjectiveLensNA(Double.parseDouble(tempNode.getAttributes().getNamedItem("NumericalAperture").getNodeValue()), 0, 0);
-				try {
-					meta.setObjectiveImmersion(Immersion.fromString(tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(0,1).toUpperCase() 
-							+ tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(1).toLowerCase()), 0, 0);
-				} catch (EnumerationException en) {
-					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Immersion setting could not be translated to OME xml. Thus immersion in OME xml was set to 'Other'.",
-							ProgressDialog.NOTIFICATION);
-					meta.setObjectiveImmersion(Immersion.OTHER, 0, 0);
-				} catch (Exception e) {
-					String out = "";
-					for (int err = 0; err < e.getStackTrace().length; err++) {
-						out += " \n " + e.getStackTrace()[err].toString();
-					}
-					progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed to transfer Immersion setting!"
-							+ "\nError message: " + e.getMessage()
-							+ "\nError localized message: " + e.getLocalizedMessage()
-							+ "\nError cause: " + e.getCause() 
-							+ "\nDetailed message:"
-							+ "\n" + out,
-							ProgressDialog.ERROR);
-				}
-				meta.setObjectiveSettingsRefractiveIndex(Double.parseDouble(tempNode.getAttributes().getNamedItem("RefractionIndex").getNodeValue()), 0);
-				meta.setObjectiveSerialNumber(tempNode.getAttributes().getNamedItem("ObjectiveNumber").getNodeValue(), 0, 0);
-			}
+			if(extendedLogging)	progress.notifyMessage("Generating objective setting for : " + tempNode.getAttributes().getNamedItem("ObjectiveName").getNodeValue(), ProgressDialog.LOG);
 			
-			tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
-			tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
-			Node LDMMasterConfocalSetDef = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
-			/**
-			 * Generate Laser settings
-			 * */
-			{
-				//Shuffle through all AOTFs and extract lasers
-				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"AotfList");
-				tempNodes = tempNode.getChildNodes();
-				
-				int addedLaser = 0;
-				Node laserNode;
-				for(int aotf = 0; aotf < tempNodes.getLength(); aotf++) {
-					tempNode = tempNodes.item(aotf);
-					for(int laser = 0; laser < tempNode.getChildNodes().getLength(); laser++) {
-						laserNode = tempNode.getChildNodes().item(laser);
-						if(!laserNode.getNodeName().equals("LaserLineSetting"))	continue;
-						if(extendedLogging)	progress.notifyMessage("Generating laser setting for : " 
-								+ laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue(), ProgressDialog.LOG);
-						meta.setLaserID("LightSource:"+addedLaser, 0, addedLaser);
-						meta.setLaserWavelength(FormatTools.getWavelength(Double.parseDouble(laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue())), 0, addedLaser);
-						addedLaser++;						
-					}
-				}
-
-				//Shuffle through the LaserArray and extract more laser information from there
-				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"LaserArray");
-				tempNodes = tempNode.getChildNodes();
-				
-				if(extendedLogging)	progress.notifyMessage("Extending laser settings from Node " + tempNode.getNodeName(), ProgressDialog.LOG);
-				
-				String unlinkedLSName = "";
-				for(int laser = 0; laser < tempNodes.getLength(); laser++) {
-					laserNode = tempNodes.item(laser);
-					if(extendedLogging)	progress.notifyMessage("Search laser " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue() 
-							+ " among " + meta.getLightSourceCount(0) + " light sources!", ProgressDialog.LOG);
-					
-					/*
-					 * Stellaris microscope has a WLL laser, when this one is loaded, the Wavelength in the Laser node is 0.
-					 * In this case the wavelength needs to be retrieved in a different way. Thus the name of that laser is saved for
-					 * adding it to all lasers missing a name later.
-					 */
-					if(laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue().equals("0")) {
-						if(unlinkedLSName.equals("")) {
-							unlinkedLSName = laserNode.getAttributes().getNamedItem("LaserName").getNodeValue();
-						}else {
-							progress.notifyMessage("Laser settings in xml contain multiple lasers with wavelength 0, there may be errors"
-									+ "in linking lasers and applied wavelength. Only the first LaserName ("
-									+ laserNode.getAttributes().getNamedItem("LaserName").getNodeValue()
-									+ ") is used for all laser settings missing a linked laser.",
-									ProgressDialog.NOTIFICATION);
-						}
-					}else {					
-						int laserID = getIDofLaserWithWavelength(meta,laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue(),0);
-						if(laserID == -1) {
-							progress.notifyMessage("Laser settings in xml are corrupted - could not retrieve laser model for " 
-									+ laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.NOTIFICATION);
-						}else {
-							if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
-									+ laserID + " (WL " + meta.getLaserWavelength(0, laserID).value().doubleValue()
-									+ ") with laser model: " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.LOG);
-							meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);
-						}
-					}				
-				}
-				
-				/*
-				 * Since in Stellaris microscopes the WLL laser is used in several channels, we now need to add the WLL to all other lines that have not received a line.
-				 */
-				for(int ls = 0; ls < meta.getLightSourceCount(0); ls++) {
-					if(meta.getLaserModel(0, ls) == null) {
-						meta.setLaserModel(unlinkedLSName, 0, ls);
-						if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
-								+ ls + " (WL " + meta.getLaserWavelength(0, ls).value().doubleValue()
-								+ ") with laser model " + unlinkedLSName + " as this laser has no model linked yet.", ProgressDialog.LOG);
-					}
-				}
-			}
-			
-			/**
-			 * Generate Detector
-			 * */
-			{
-				//Shuffle through all AOTFs and extract lasers
-				tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"DetectorList");
-				tempNodes = tempNode.getChildNodes();
-				
-				int addedDetector = 0;
-				Node detectorNode;
-				for(int det = 0; det < tempNodes.getLength(); det++) {
-					detectorNode = tempNodes.item(det);
-					if(!detectorNode.getNodeName().equals("Detector"))	continue;
-					
-					if(extendedLogging)	progress.notifyMessage("Generating detector setting for " 
-							+ detectorNode.getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
-					
-					meta.setDetectorID("Detector:"+addedDetector, 0, addedDetector);
-					meta.setDetectorModel(detectorNode.getAttributes().getNamedItem("Name").getNodeValue(), 0, addedDetector);
-					try{
-						meta.setDetectorType(DetectorType.fromString(detectorNode.getAttributes().getNamedItem("Type").getNodeValue()), 0, addedDetector);
-					}catch(EnumerationException e) {
-						meta.setDetectorType(DetectorType.OTHER, 0, addedDetector);
-					}
-					meta.setDetectorZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, addedDetector);
-					addedDetector++;
-				}
-			}
-			
-			/**
-			 * Translate metadata - channel information
-			 * It is a sequential recording > we need to read the <LDM_Block_Sequential_List> node, 
-			 * which contains a <ATLConfocalSettingDefinition> for each sequential recording.
-			 * */
-			{
-				tempNodes = metaDoc.getElementsByTagName("LDM_Block_Sequential_List");
-				tempNodes = tempNodes.item(0).getChildNodes();
-				int ldm = 0;
-				int channel = 0;
-				for(int cn = 0; cn < tempNodes.getLength(); cn++) {
-					Node DefNode = tempNodes.item(cn);
-					//Verify that these are named ATLConfocalSettingDefinition
-					if(DefNode.getNodeName() != "ATLConfocalSettingDefinition") {
-						progress.notifyMessage("LDM_Block_Sequential_List does not only contain ATLConfocalSettingDefinition - detected node with name " 
-								+ DefNode.getNodeName(), ProgressDialog.NOTIFICATION);	
-						continue;
-					}
-					
-					NodeList Detectors = getFirstNodeWithName(DefNode.getChildNodes(), "DetectorList").getChildNodes();
-					int detectNr = 0;
-					for(int d = 0; d < Detectors.getLength(); d++) {
-						if(Detectors.item(d).getNodeName() != "Detector") {
-							progress.notifyMessage("Problem: DetectorList for def " + cn + " contains elements other than Detector" 
-									+ Detectors.item(d).getNodeName(), ProgressDialog.NOTIFICATION);	
-							continue;
-						}
-						
-						if(Detectors.item(d).getAttributes().getNamedItem("IsActive").getNodeValue().equals("1")) {
-							if(extendedLogging)	progress.notifyMessage("Generating channel setting " + channel 
-									+ " using detector " + Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
-
-							//Add Channel to pixels object and specify channel settings accordingly
-							meta.setChannelID("Channel:" + channel, 0, channel);
-							meta.setDetectorSettingsID("Detector:"+detectNr, 0, channel);
-							meta.setDetectorSettingsGain(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Gain").getNodeValue()), 0, channel);
-							meta.setDetectorSettingsOffset(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Offset").getNodeValue()), 0, channel);
-							meta.setDetectorSettingsReadOutRate(FormatTools.createFrequency(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("ScanSpeed").getNodeValue()), UNITS.HERTZ),0, channel);
-							meta.setDetectorSettingsZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, channel);
-							meta.setObjectiveSettingsID("Objective:0", 0);
-							
-							/**
-							 * Fetch Pinhole
-							 * */
-							if (DefNode.getAttributes().getNamedItem("Pinhole") != null) {
-								if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()
-										+ " to " + Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
-								
-								meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);
-							}else if (LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole") != null){
-								// In this case we can try fetching it from the master node for all sequentials called  <LDM_Block_Sequential_Master>
-								// Note this is the case for Stellaris microscope Files
-								if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()
-										+ " to " + Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
-								meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);								
-							}else {
-								progress.notifyMessage("WARNING: Could not find a Pinhole size for Detector " + detectNr, ProgressDialog.NOTIFICATION);
-							}
-							
-							
-							/**
-							 * Setup the channel ranges and filter settings
-							 * Extract the detected (emission) wavelength range from the Spectro Node > MultiBand settings and create a corresponding filter
-							 * */
-							meta.setFilterID("Filter:"+channel, 0, channel);
-							meta.setFilterModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
-							meta.setFilterSetID("FilterSet:"+channel, 0, channel);
-							meta.setFilterSetEmissionFilterRef("Filter:"+channel, 0, channel, channel);
-							meta.setFilterSetModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
-							meta.setChannelFilterSetRef("FilterSet:"+channel, 0, channel);
-					
-							if(!meta.getFilterModel(0,channel).equals("PMT Trans")  // Called PMT Trans in Sp8 Microscope
-									&& !meta.getFilterModel(0,channel).equals("Trans PMT")) { //Called Trans PMT in Stellaris Microscope
-								if(extendedLogging)	progress.notifyMessage("Setting up spectro band for " + channel 
-										+ " (Channel model: " + meta.getFilterModel(0,channel) + ")", ProgressDialog.LOG);
-								
-								Node spectro = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro");
-								if(spectro == null) {
-									// Leica SP8: Find Spectro Node in individual Sequential settings as above.
-									// Since spectro still null must come from another microscope like Stellaris and
-									// spectro settings persistent across all sequential settings. Thus fetch it from master node.
-									spectro = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(), "Spectro");
-								}
-								
-								if(spectro != null) {									
-									NodeList Multibands = spectro.getChildNodes();
-									for(int m = 0; m < Multibands.getLength(); m++) {
-										if(Multibands.item(m).getNodeName() != "MultiBand") {
-											progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
-													+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);
-											continue;
-										}
-										
-										if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
-											if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
-													+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ", Left: "
-															+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right: "
-																	+ Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue() + ")", ProgressDialog.LOG);
-											meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
-											meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
-											break;
-										}
-									}
-								}else {
-									progress.notifyMessage("WARNING: Could not find out emmission ranges "
-											+ "since could not find spectro node in metadata (Detector: " + detectNr + ")", ProgressDialog.NOTIFICATION);
-								}						
-							}
-														
-							
-							/**
-							 * Assign wavelengths to Channels from the AotfList > Aotf > LaserLineSetting nodes							 * 
-							 * */
-							NodeList Aotfs = getFirstNodeWithName(DefNode.getChildNodes(), "AotfList").getChildNodes();
-							double waveLength = -1.0;
-							double laserPower = 0.0;
-							for(int aotf = 0; aotf < Aotfs.getLength(); aotf++) {
-								if(Aotfs.item(aotf).getNodeName() != "Aotf") {
-									progress.notifyMessage("Problem: Aotf list for def " + cn + " contains elements other than Aotf" 
-											+ Aotfs.item(aotf).getNodeName(), ProgressDialog.NOTIFICATION);	
-									continue;
-								}
-								
-								for(int las = 0; las < Aotfs.item(aotf).getChildNodes().getLength(); las++) {
-									if(Aotfs.item(aotf).getChildNodes().item(las).getNodeName() == "BeamRoute") {
-										continue;
-									}else if(Aotfs.item(aotf).getChildNodes().item(las).getNodeName() != "BeamRoute" 
-											&& Aotfs.item(aotf).getChildNodes().item(las).getNodeName() != "LaserLineSetting") {
-										progress.notifyMessage("Problem: Elements for def " + cn + ", aotf " + aotf + " contains elements other than LaserLineSetting or BeamRoute" 
-												+ Aotfs.item(aotf).getChildNodes().item(las).getNodeName(), ProgressDialog.NOTIFICATION);	
-										continue;
-									}
-									
-									// Check: is the laser active ("IntensityDev" > 0) - if not, ignore!
-									if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue()) > 0.0)) {
-										continue;
-									}
-																		
-									// For channels that are not PTM Trans: Is the wavelength lower or in the emission range (if emission range set)? If yes it is a potential wavelength to be used, if no do not consider
-									if(!meta.getFilterModel(0,channel).equals("PMT Trans") // Called PMT Trans in Sp8 Microscope
-												&& !meta.getFilterModel(0,channel).equals("Trans PMT")) { //Called Trans PMT in Stellaris Microscope
-										if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
-												< meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue())) {
-											continue;
-										}
-										if(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
-												>= meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue()) {
-											progress.notifyMessage("Task " + (task+1) + ": Potential problem! Excitation (" 
-													+ Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() + ") that is within emission range (" 
-													+ meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue() + " - "
-													+ meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue() + ") detected!", ProgressDialog.NOTIFICATION);
-										}
-									}									
-									
-									if(extendedLogging)	progress.notifyMessage("Found potential wavelength for channel " + channel 
-											+ " (wavelength " + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() 
-											+ ", power" + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue() + ")", ProgressDialog.LOG);
-									
-									//check if a waveLength has been already picked > if no, assign that wavelength, if yes assign only if the wavelength is higher 
-									//(highest wavelength is most likely the one relevant for the fluorophore)
-									if(waveLength==-1.0) {
-										waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
-										laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
-										if(extendedLogging)	progress.notifyMessage("Set wavelength for channel " + channel
-												+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
-									}else if(!meta.getFilterModel(0,channel).equals("PMT Trans") // Called PMT Trans in Sp8 Microscope
-										&& !meta.getFilterModel(0,channel).equals("Trans PMT") //Called Trans PMT in Stellaris Microscope
-											&& waveLength < Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue())){
-										waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
-										laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
-										if(extendedLogging)	progress.notifyMessage("Replace wavelength for channel " + channel 
-												+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
-									}else {
-										if(extendedLogging)	progress.notifyMessage("Do not replace wavelength for channel " + channel 
-												+ " with wavelength " + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() 
-												+ " (power" + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue() + ")", ProgressDialog.LOG);
-									}									
-								}																
-							}
-							
-							if(waveLength==-1.0) {
-								progress.notifyMessage("Could not find / set a wavelength for channel " + channel + "!", ProgressDialog.NOTIFICATION);
-							}else {
-								if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + " (new wavelength " + waveLength + ", power " + laserPower + ")", ProgressDialog.LOG);
-								meta.setChannelExcitationWavelength(FormatTools.getWavelength(waveLength), 0, channel);								
-								for(int las = 0; las < meta.getLightSourceCount(0); las++) {
-									if(meta.getLaserWavelength(0, las).value().doubleValue() == waveLength) {										
-										meta.setChannelLightSourceSettingsID(meta.getLaserID(0, las), 0, channel);
-										meta.setChannelLightSourceSettingsAttenuation(new PercentFraction((float)(laserPower/100.0)), 0, channel);
-										break;										
-									}									
-								}								
-							}							
-							channel++;
-						}						
-						detectNr++;
-					}					
-					ldm++;
-				}				
-			}
-			
-			/**
-			 * Add Z positions
-			 * */
-			double baseZPosition = 0.0;
-			//Extract base Z positions
-			{
-				NodeList zNodes = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(), "AdditionalZPositionList").getChildNodes();
-				for(int zN = 0; zN < zNodes.getLength(); zN++) {
-					if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-galvo")) {
-						if(extendedLogging)	progress.notifyMessage("Fetching galvo z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
-								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
-						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
-						//This position is added in files from version v0.2.1 on, since it turned out that this actually matters
-					}else if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-wide")) {
-						if(extendedLogging)	progress.notifyMessage("Fetching widefield z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
-								+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
-						baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
-					}else {
-						progress.notifyMessage("WARNING: There is an unknown z position node in AdditionalZPositionList of the Master ATLConfocalSettingDefinition ... (NodeName: " 
-								+ zNodes.item(zN).getNodeName() + ")", ProgressDialog.NOTIFICATION);
-					}
-				}
-			}
-			if(extendedLogging)	progress.notifyMessage("Basal z position determined to be ... " + baseZPosition, ProgressDialog.LOG);
-			
-			//Extract begin and end of stack Z positions to find z position in stack
-			double zSteps;
+			meta.setObjectiveNominalMagnification(Double.parseDouble(tempNode.getAttributes().getNamedItem("Magnification").getNodeValue()), 0, 0);
+			meta.setObjectiveLensNA(Double.parseDouble(tempNode.getAttributes().getNamedItem("NumericalAperture").getNodeValue()), 0, 0);
 			try {
-				double beginZ, endZ;
-				if(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin") == null) {
-					// Single plane image, we can set it to an arbitrary value
-					beginZ = 0;
-					endZ = 0.7;
-					zSteps = 0.7;
-					progress.notifyMessage("No stack image > Creating begin / end stack positions as " + beginZ + " and " + endZ, ProgressDialog.LOG);
-					
-				}else {			
-					// Z stacks: begin / end information is there and can be used later to determine z step size.
-					beginZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue());
-					endZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue());
-					
-					if(extendedLogging) {
-						progress.notifyMessage("Fetching stack begin Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue()
-							+ " (Parsed to double: " + beginZ + ")", ProgressDialog.LOG);
-						progress.notifyMessage("Fetching stack end Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue()
-							+ " (Parsed to double: " + endZ + ")", ProgressDialog.LOG);
-					}
-
-					zSteps = (endZ - beginZ) / (double)(meta.getPixelsSizeZ(0).getValue()-1.0); //Calculating the Z step size from begin / end of stack
-					
-					if(extendedLogging) {
-						progress.notifyMessage("Determining z steps to be " + zSteps
-							+ " m (Pixel Z size in pixels object: " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0 + " m, matching? " 
-							+ (zSteps == meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0)+ ")", ProgressDialog.LOG);
-					}
-				}				
-			}catch(Exception e) {
+				meta.setObjectiveImmersion(Immersion.fromString(tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(0,1).toUpperCase() 
+						+ tempNode.getAttributes().getNamedItem("Immersion").getNodeValue().substring(1).toLowerCase()), 0, 0);
+			} catch (EnumerationException en) {
+				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Immersion setting could not be translated to OME xml. Thus immersion in OME xml was set to 'Other'.",
+						ProgressDialog.NOTIFICATION);
+				meta.setObjectiveImmersion(Immersion.OTHER, 0, 0);
+			} catch (Exception e) {
 				String out = "";
 				for (int err = 0; err < e.getStackTrace().length; err++) {
 					out += " \n " + e.getStackTrace()[err].toString();
 				}
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": "
-						+ "Failed to detect begin / end of stack = number of z-steps!"
+				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": Failed to transfer Immersion setting!"
 						+ "\nError message: " + e.getMessage()
 						+ "\nError localized message: " + e.getLocalizedMessage()
 						+ "\nError cause: " + e.getCause() 
 						+ "\nDetailed message:"
 						+ "\n" + out,
-					ProgressDialog.ERROR);
-				return;
+						ProgressDialog.ERROR);
+			}
+			meta.setObjectiveSettingsRefractiveIndex(Double.parseDouble(tempNode.getAttributes().getNamedItem("RefractionIndex").getNodeValue()), 0);
+			meta.setObjectiveSerialNumber(tempNode.getAttributes().getNamedItem("ObjectiveNumber").getNodeValue(), 0, 0);
+		}
+		
+		tempNode = getFirstNodeWithName(attachmentHardwareSettings.getChildNodes(),"LDM_Block_Sequential");
+		tempNode = getFirstNodeWithName(tempNode.getChildNodes(),"LDM_Block_Sequential_Master");
+		Node LDMMasterConfocalSetDef = getFirstNodeWithName(tempNode.getChildNodes(),"ATLConfocalSettingDefinition");
+		/**
+		 * Generate Laser settings
+		 * */
+		{
+			//Shuffle through all AOTFs and extract lasers
+			tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"AotfList");
+			tempNodes = tempNode.getChildNodes();
+			
+			int addedLaser = 0;
+			Node laserNode;
+			for(int aotf = 0; aotf < tempNodes.getLength(); aotf++) {
+				tempNode = tempNodes.item(aotf);
+				for(int laser = 0; laser < tempNode.getChildNodes().getLength(); laser++) {
+					laserNode = tempNode.getChildNodes().item(laser);
+					if(!laserNode.getNodeName().equals("LaserLineSetting"))	continue;
+					if(extendedLogging)	progress.notifyMessage("Generating laser setting for : " 
+							+ laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue(), ProgressDialog.LOG);
+					meta.setLaserID("LightSource:"+addedLaser, 0, addedLaser);
+					meta.setLaserWavelength(FormatTools.getWavelength(Double.parseDouble(laserNode.getAttributes().getNamedItem("LaserLine").getNodeValue())), 0, addedLaser);
+					addedLaser++;						
+				}
 			}
 
-			int theZ;
-			double newZ = -1.0;
-			double xPos, yPos;
-			for(int p = 0; p < meta.getPlaneCount(0); p++) {
-				/**
-				 * Calculate and write z position for each plane
-				 * */
-				NonNegativeInteger theZObj = meta.getPlaneTheZ(0, p);
-				if (theZObj == null) {
-					/**
-					 * Calculate the z position through retrieving information from:
-					  	<AdditionalZPositionList>
-							<AdditionalZPosition Valid="1" SuperZMode="1" SuperZModeName="RestrictedRange" ZMode="1" ZUseModeName="z-galvo" ZPosition="-2.3841880645312E-10"/>
-							<AdditionalZPosition Valid="1" SuperZMode="1" SuperZModeName="RestrictedRange" ZMode="2" ZUseModeName="z-wide" ZPosition="0.002765538685"/>
-						</AdditionalZPositionList>
-						nested under the LDMMasterConfocalSetDef node. This is done above and returned as baseZPosition.
-						There seems to be no different z plane thus we just consider theZ to be 0.
-					 */
-					theZ = 0;
-					newZ = baseZPosition;
-				} else {
-				    theZ = theZObj.getValue();
-					newZ = baseZPosition + zSteps * (double) theZ;
-				}
+			//Shuffle through the LaserArray and extract more laser information from there
+			tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"LaserArray");
+			tempNodes = tempNode.getChildNodes();
+			
+			if(extendedLogging)	progress.notifyMessage("Extending laser settings from Node " + tempNode.getNodeName(), ProgressDialog.LOG);
+			
+			String unlinkedLSName = "";
+			for(int laser = 0; laser < tempNodes.getLength(); laser++) {
+				laserNode = tempNodes.item(laser);
+				if(extendedLogging)	progress.notifyMessage("Search laser " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue() 
+						+ " among " + meta.getLightSourceCount(0) + " light sources!", ProgressDialog.LOG);
 				
-				meta.setPlanePositionZ(FormatTools.createLength(newZ,UNITS.METER), 0, p);
-				
-				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") received z position " 
-						+ meta.getPlanePositionZ(0, p).value().doubleValue() + " " + meta.getPlanePositionZ(0, p).unit().getSymbol()
-						+ " (basal Z position " + baseZPosition + ", Z pixel Size " + meta.getPixelsSizeZ(0).getValue() + ")", ProgressDialog.LOG);
-				
-				/**
-				 * Correct unit in X and Y positions
-				 * */
-				xPos = meta.getPlanePositionX(0, p).value().doubleValue();
-				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change x position from " 
-						+ meta.getPlanePositionX(0, p).value().doubleValue() + " " + meta.getPlanePositionX(0, p).unit().getSymbol()
-						+ " to " + FormatTools.createLength(xPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(xPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
-				meta.setPlanePositionX(FormatTools.createLength(xPos,UNITS.METER), 0, p);
-
-				yPos = meta.getPlanePositionY(0, p).value().doubleValue();
-				if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change y position from " 
-						+ meta.getPlanePositionY(0, p).value().doubleValue() + " " + meta.getPlanePositionY(0, p).unit().getSymbol()
-						+ " to " + FormatTools.createLength(yPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(yPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
-				meta.setPlanePositionY(FormatTools.createLength(yPos,UNITS.METER), 0, p);				
+				/*
+				 * Stellaris microscope has a WLL laser, when this one is loaded, the Wavelength in the Laser node is 0.
+				 * In this case the wavelength needs to be retrieved in a different way. Thus the name of that laser is saved for
+				 * adding it to all lasers missing a name later.
+				 */
+				if(laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue().equals("0")) {
+					if(unlinkedLSName.equals("")) {
+						unlinkedLSName = laserNode.getAttributes().getNamedItem("LaserName").getNodeValue();
+					}else {
+						progress.notifyMessage("Laser settings in xml contain multiple lasers with wavelength 0, there may be errors"
+								+ "in linking lasers and applied wavelength. Only the first LaserName ("
+								+ laserNode.getAttributes().getNamedItem("LaserName").getNodeValue()
+								+ ") is used for all laser settings missing a linked laser.",
+								ProgressDialog.NOTIFICATION);
+					}
+				}else {					
+					int laserID = getIDofLaserWithWavelength(meta,laserNode.getAttributes().getNamedItem("Wavelength").getNodeValue(),0);
+					if(laserID == -1) {
+						progress.notifyMessage("Laser settings in xml are corrupted - could not retrieve laser model for " 
+								+ laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.NOTIFICATION);
+					}else {
+						if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
+								+ laserID + " (WL " + meta.getLaserWavelength(0, laserID).value().doubleValue()
+								+ ") with laser model: " + laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), ProgressDialog.LOG);
+						meta.setLaserModel(laserNode.getAttributes().getNamedItem("LaserName").getNodeValue(), 0, laserID);
+					}
+				}				
 			}
 			
-			/**
-			 * Add as a manual annotation the X,Y,Z positions of the current image / plane
-			 * */
-			int imageZ = -1, imageC = -1, imageT = -1;
-			for(int tiffD = 0; tiffD < meta.getTiffDataCount(0); tiffD++) {
-				if(meta.getUUIDValue(0, tiffD).equals(meta.getUUID())) {
-					imageC = meta.getTiffDataFirstC(0, tiffD).getValue();
-					imageZ = meta.getTiffDataFirstZ(0, tiffD).getValue();
-					imageT = meta.getTiffDataFirstT(0, tiffD).getValue();
-										
-					meta.setImageDescription("Filename: '" + meta.getUUIDFileName(0, tiffD) + "'", 0);
-					
-					if(extendedLogging)	progress.notifyMessage("Found UUID " + meta.getUUID() + ": C" 
-							 + imageC + " Z" + imageZ + " T" + imageT + " File name " + meta.getUUIDFileName(0, tiffD), ProgressDialog.LOG);
-					break;
-				}
-			}
-			if(imageZ == -1) {
-				progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": ERROR! The metadata does not contain any plane information for the UUID!",
-						ProgressDialog.NOTIFICATION);
-			}
-			for(int p = 0; p < meta.getPlaneCount(0); p++) {
-				if(meta.getPlaneTheZ(0, p).getValue()==imageZ
-						&& meta.getPlaneTheC(0, p).getValue()==imageC
-						&& meta.getPlaneTheT(0, p).getValue()==imageT) {
-					meta.setImageDescription("ImageCoordinates: "
-							+ "x=" + meta.getPlanePositionX(0, p).value().doubleValue() + meta.getPlanePositionX(0, p).unit().getSymbol() + ", "
-							+ "y=" + meta.getPlanePositionY(0, p).value().doubleValue() + meta.getPlanePositionY(0, p).unit().getSymbol() + ", "
-							+ "z=" + meta.getPlanePositionZ(0, p).value().doubleValue() + meta.getPlanePositionZ(0, p).unit().getSymbol() + ";\n"
-							+ meta.getImageDescription(0)
-							+ ";\nThis OME Metadatafile was enriched based on the corresponding .ome.xml file with the help of the plugin " + PLUGINNAME + " (Version: " + PLUGINVERSION + ")",
-						0);
-				}
-			}
-			
-			/**
-			 * Retrieve new comment
-			 * */
-			comment = service.getOMEXML(meta);
-			
-			if(logWholeComments) {
-				progress.notifyMessage("Comment after adjustments:", ProgressDialog.LOG);
-				progress.notifyMessage(comment, ProgressDialog.LOG);
-				
-			}
-			
-			/**
-			 * Create folder and copy files there
-			 * name = well, e.g. B2 or filename and well, e.g. DIl1295 TileScan1 B2
-			 * positionName = image region in the well, e.g. R1			 * 
-			 * */		
-			// Get acquisition date
-			String dateString = "unknownDate";
-			try {
-				dateString = meta.getImageAcquisitionDate(0).getValue();
-			}catch(Exception e){
-				progress.notifyMessage("Task " + (1+task) + ": Error during fetching acquisition date/time for " + name + " " + positionName + ", Z" + imageZ, ProgressDialog.NOTIFICATION);				
-			}
-			dateString = dateString.replace("-", "");
-			dateString = dateString.replace(":", "");
-			dateString = dateString.replace(".", "_");
-			dateString = dateString.replace("T", "_");
-			
-			// Generate a new unique directory to save the images
-			String saveDir = name + " " + positionName + "_" + dateString + "_Z" + imageZ;
-			File savingDirectory = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator"));
-			
-			if(new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator")).exists()) {				
-				if(extendedLogging)	progress.notifyMessage("Directory to save files already existed: " + savingDirectory.getAbsolutePath(), ProgressDialog.LOG);
-			}else {
-				if(extendedLogging)	progress.notifyMessage("Creating directory to save files: " + savingDirectory.getAbsolutePath(), ProgressDialog.LOG);
-				savingDirectory.mkdir();
-			}
-			
-			// Copy image and metadata (if not already there)
-//			String saveName = file.substring(file.lastIndexOf(System.getProperty("file.separator"))+1);
-			String saveName = positionName + "";
-			if(imageZ >= 10) {
-				saveName += "_Z" + imageZ;
-			}else {
-				saveName += "_Z0" + imageZ;
-			}
-			if(imageC >= 10) {
-				saveName += "_C" + imageC;
-			}else {
-				saveName += "_C0" + imageC;
-			}
-			saveName += ".ome.tif";
-			
-			String savePath = outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + saveName; 
-			
-			FileUtils.copyFile(new File(file), new File(savePath));
-			
-			/**
-			 * From version v0.1.0 on the path for the metadata xml was switched from 
-			 * ```new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") + "MetaData.ome.xml")```
-			 * to the following one to make sure LIMS reads it and to fix github issue #1:
+			/*
+			 * Since in Stellaris microscopes the WLL laser is used in several channels, we now need to add the WLL to all other lines that have not received a line.
 			 */
-			File newMetadataFile = new File(outPath + System.getProperty("file.separator") + saveDir + System.getProperty("file.separator") 
-										+ "metadata" + System.getProperty("file.separator") + "image.ome.xml");
+			for(int ls = 0; ls < meta.getLightSourceCount(0); ls++) {
+				if(meta.getLaserModel(0, ls) == null) {
+					meta.setLaserModel(unlinkedLSName, 0, ls);
+					if(extendedLogging)	progress.notifyMessage("Extending laser setting for Laser:" 
+							+ ls + " (WL " + meta.getLaserWavelength(0, ls).value().doubleValue()
+							+ ") with laser model " + unlinkedLSName + " as this laser has no model linked yet.", ProgressDialog.LOG);
+				}
+			}
+		}
+		
+		/**
+		 * Generate Detector
+		 * */
+		{
+			//Shuffle through all AOTFs and extract lasers
+			tempNode = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(),"DetectorList");
+			tempNodes = tempNode.getChildNodes();
 			
-			if(newMetadataFile.exists()) {
-				if(extendedLogging)	progress.notifyMessage("Metadata existed already (" + newMetadataFile.getAbsolutePath() + ")", ProgressDialog.LOG);
-			}else {
-				FileUtils.copyFile(metaDataFile, newMetadataFile);
-				if(extendedLogging)	progress.notifyMessage("Saved " + newMetadataFile.getAbsolutePath(), ProgressDialog.LOG);
+			int addedDetector = 0;
+			Node detectorNode;
+			for(int det = 0; det < tempNodes.getLength(); det++) {
+				detectorNode = tempNodes.item(det);
+				if(!detectorNode.getNodeName().equals("Detector"))	continue;
+				
+				if(extendedLogging)	progress.notifyMessage("Generating detector setting for " 
+						+ detectorNode.getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
+				
+				meta.setDetectorID("Detector:"+addedDetector, 0, addedDetector);
+				meta.setDetectorModel(detectorNode.getAttributes().getNamedItem("Name").getNodeValue(), 0, addedDetector);
+				try{
+					meta.setDetectorType(DetectorType.fromString(detectorNode.getAttributes().getNamedItem("Type").getNodeValue()), 0, addedDetector);
+				}catch(EnumerationException e) {
+					meta.setDetectorType(DetectorType.OTHER, 0, addedDetector);
+				}
+				meta.setDetectorZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, addedDetector);
+				addedDetector++;
+			}
+		}
+		
+		/**
+		 * Translate metadata - channel information
+		 * It is a sequential recording > we need to read the <LDM_Block_Sequential_List> node, 
+		 * which contains a <ATLConfocalSettingDefinition> for each sequential recording.
+		 * */
+		{
+			tempNodes = metaDoc.getElementsByTagName("LDM_Block_Sequential_List");
+			tempNodes = tempNodes.item(0).getChildNodes();
+			int ldm = 0;
+			int channel = 0;
+			for(int cn = 0; cn < tempNodes.getLength(); cn++) {
+				Node DefNode = tempNodes.item(cn);
+				//Verify that these are named ATLConfocalSettingDefinition
+				if(DefNode.getNodeName() != "ATLConfocalSettingDefinition") {
+					progress.notifyMessage("LDM_Block_Sequential_List does not only contain ATLConfocalSettingDefinition - detected node with name " 
+							+ DefNode.getNodeName(), ProgressDialog.NOTIFICATION);	
+					continue;
+				}
+				
+				NodeList Detectors = getFirstNodeWithName(DefNode.getChildNodes(), "DetectorList").getChildNodes();
+				int detectNr = 0;
+				for(int d = 0; d < Detectors.getLength(); d++) {
+					if(Detectors.item(d).getNodeName() != "Detector") {
+						progress.notifyMessage("Problem: DetectorList for def " + cn + " contains elements other than Detector" 
+								+ Detectors.item(d).getNodeName(), ProgressDialog.NOTIFICATION);	
+						continue;
+					}
+					
+					if(Detectors.item(d).getAttributes().getNamedItem("IsActive").getNodeValue().equals("1")) {
+						if(extendedLogging)	progress.notifyMessage("Generating channel setting " + channel 
+								+ " using detector " + Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), ProgressDialog.LOG);
+
+						//Add Channel to pixels object and specify channel settings accordingly
+						meta.setChannelID("Channel:" + channel, 0, channel);
+						
+						// Safely map channel to selected type with bounds checking and logging
+						String channelName;
+						if (channel < selectedChannelType.length && selectedChannelType[channel] != null) {
+						    channelName = selectedChannelType[channel];
+						    
+						    // Extract the color/type before the parenthetical description
+						    // e.g., "blue (DAPI/DNA)" -> "blue"
+						    if(selectedChannelType[channel].contains(" (")) {
+						        channelName = selectedChannelType[channel].substring(0, selectedChannelType[channel].indexOf(" ("));
+						    } else if(selectedChannelType[channel].contains(" ")) {
+						        channelName = selectedChannelType[channel].substring(0, selectedChannelType[channel].indexOf(" "));
+						    } else {
+						        channelName = selectedChannelType[channel];
+						    }
+						    
+						    // Handle "NA" selection
+						    if(channelName.equalsIgnoreCase("NA")) {
+						        channelName = "undefined";
+						        if(extendedLogging) {
+						            progress.notifyMessage("Channel " + channel + " was marked as NA", ProgressDialog.LOG);
+						        }
+						    }
+						    
+						    if(extendedLogging) {
+						        progress.notifyMessage("Setting channel " + channel + " name to: " + channelName, ProgressDialog.LOG);
+						    }
+						} else {
+						    channelName = "undefined";
+						    progress.notifyMessage("Warning: Channel " + channel + " exceeds predefined channel types (0-" 
+						        + (selectedChannelType.length - 1) + "). Using default name: " + channelName, 
+						        ProgressDialog.NOTIFICATION);
+						}
+						meta.setChannelName("HPA-Channel:"+channelName, 0, channel);
+						
+						meta.setDetectorSettingsID("Detector:"+detectNr, 0, channel);
+						meta.setDetectorSettingsGain(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Gain").getNodeValue()), 0, channel);
+						meta.setDetectorSettingsOffset(Double.parseDouble(Detectors.item(d).getAttributes().getNamedItem("Offset").getNodeValue()), 0, channel);
+						meta.setDetectorSettingsReadOutRate(FormatTools.createFrequency(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("ScanSpeed").getNodeValue()), UNITS.HERTZ),0, channel);
+						meta.setDetectorSettingsZoom(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Zoom").getNodeValue()), 0, channel);
+						meta.setObjectiveSettingsID("Objective:0", 0);
+						
+						/**
+						 * Fetch Pinhole
+						 * */
+						if (DefNode.getAttributes().getNamedItem("Pinhole") != null) {
+							if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()
+									+ " to " + Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
+							
+							meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(DefNode.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);
+						}else if (LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole") != null){
+							// In this case we can try fetching it from the master node for all sequentials called  <LDM_Block_Sequential_Master>
+							// Note this is the case for Stellaris microscope Files
+							if(extendedLogging)	progress.notifyMessage("Casting pinhole value " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()
+									+ " to " + Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()), ProgressDialog.LOG);
+							meta.setChannelPinholeSize(FormatTools.createLength(Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Pinhole").getNodeValue()),UNITS.METER), 0, channel);								
+						}else {
+							progress.notifyMessage("WARNING: Could not find a Pinhole size for Detector " + detectNr, ProgressDialog.NOTIFICATION);
+						}
+						
+						
+						/**
+						 * Setup the channel ranges and filter settings
+						 * Extract the detected (emission) wavelength range from the Spectro Node > MultiBand settings and create a corresponding filter
+						 * */
+						meta.setFilterID("Filter:"+channel, 0, channel);
+						meta.setFilterModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
+						meta.setFilterSetID("FilterSet:"+channel, 0, channel);
+						meta.setFilterSetEmissionFilterRef("Filter:"+channel, 0, channel, channel);
+						meta.setFilterSetModel(Detectors.item(d).getAttributes().getNamedItem("Name").getNodeValue(), 0, channel);
+						meta.setChannelFilterSetRef("FilterSet:"+channel, 0, channel);
+						
+						String channelFilterModel = meta.getFilterModel(0,channel);
+						
+						if(!channelFilterModel.equals(CHANNEL_PMT_TRANS_SP8)  // Called PMT Trans in Sp8 Microscope
+								&& !channelFilterModel.equals(CHANNEL_PMT_TRANS_STELLARIS)) { //Called Trans PMT in Stellaris Microscope
+							if(extendedLogging)	progress.notifyMessage("Setting up spectro band for " + channel 
+									+ " (Channel model: " + channelFilterModel + ")", ProgressDialog.LOG);
+							
+							Node spectro = getFirstNodeWithName(DefNode.getChildNodes(), "Spectro");
+							if(spectro == null) {
+								// Leica SP8: Find Spectro Node in individual Sequential settings as above.
+								// Since spectro still null must come from another microscope like Stellaris and
+								// spectro settings persistent across all sequential settings. Thus fetch it from master node.
+								spectro = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(), "Spectro");
+							}
+							
+							if(spectro != null) {									
+								NodeList Multibands = spectro.getChildNodes();
+								for(int m = 0; m < Multibands.getLength(); m++) {
+									if(Multibands.item(m).getNodeName() != "MultiBand") {
+										progress.notifyMessage("Problem: MultiBandList for def " + cn + " contains elements other than Detector" 
+												+ Multibands.item(m).getNodeName(), ProgressDialog.NOTIFICATION);
+										continue;
+									}
+									
+									if(Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue().equals(Detectors.item(d).getAttributes().getNamedItem("ChannelName").getNodeValue())) {
+										if(extendedLogging)	progress.notifyMessage("Getting emission range for channel " + channel 
+												+ "(" + Multibands.item(m).getAttributes().getNamedItem("ChannelName").getNodeValue() + ", Left: "
+														+ Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue() + ", Right: "
+																+ Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue() + ")", ProgressDialog.LOG);
+										meta.setTransmittanceRangeCutIn(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("LeftWorld").getNodeValue())), 0, channel);
+										meta.setTransmittanceRangeCutOut(FormatTools.getWavelength(Double.parseDouble(Multibands.item(m).getAttributes().getNamedItem("RightWorld").getNodeValue())), 0, channel);
+										break;
+									}
+								}
+							}else {
+								progress.notifyMessage("WARNING: Could not find out emmission ranges "
+										+ "since could not find spectro node in metadata (Detector: " + detectNr + ")", ProgressDialog.NOTIFICATION);
+							}						
+						}
+													
+						
+						/**
+						 * Assign wavelengths to Channels from the AotfList > Aotf > LaserLineSetting nodes							 * 
+						 * */
+						NodeList Aotfs = getFirstNodeWithName(DefNode.getChildNodes(), "AotfList").getChildNodes();
+						double waveLength = -1.0;
+						double laserPower = 0.0;
+						for(int aotf = 0; aotf < Aotfs.getLength(); aotf++) {
+							if(Aotfs.item(aotf).getNodeName() != "Aotf") {
+								progress.notifyMessage("Problem: Aotf list for def " + cn + " contains elements other than Aotf" 
+										+ Aotfs.item(aotf).getNodeName(), ProgressDialog.NOTIFICATION);	
+								continue;
+							}
+							
+							for(int las = 0; las < Aotfs.item(aotf).getChildNodes().getLength(); las++) {
+								if(Aotfs.item(aotf).getChildNodes().item(las).getNodeName() == "BeamRoute") {
+									continue;
+								}else if(Aotfs.item(aotf).getChildNodes().item(las).getNodeName() != "BeamRoute" 
+										&& Aotfs.item(aotf).getChildNodes().item(las).getNodeName() != "LaserLineSetting") {
+									progress.notifyMessage("Problem: Elements for def " + cn + ", aotf " + aotf + " contains elements other than LaserLineSetting or BeamRoute" 
+											+ Aotfs.item(aotf).getChildNodes().item(las).getNodeName(), ProgressDialog.NOTIFICATION);	
+									continue;
+								}
+								
+								// Check: is the laser active ("IntensityDev" > 0) - if not, ignore!
+								if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue()) > 0.0)) {
+									continue;
+								}
+																	
+								// For channels that are not PTM Trans: Is the wavelength lower or in the emission range (if emission range set)? If yes it is a potential wavelength to be used, if no do not consider
+								if(!channelFilterModel.equals(CHANNEL_PMT_TRANS_SP8) // Called PMT Trans in Sp8 Microscope
+											&& !channelFilterModel.equals(CHANNEL_PMT_TRANS_STELLARIS)) { //Called Trans PMT in Stellaris Microscope
+									if(!(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
+											< meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue())) {
+										continue;
+									}
+									if(Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue()) 
+											>= meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue()) {
+										progress.notifyMessage("Task " + (task+1) + ": Potential problem! Excitation (" 
+												+ Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() + ") that is within emission range (" 
+												+ meta.getTransmittanceRangeCutIn(0, channel).value().doubleValue() + " - "
+												+ meta.getTransmittanceRangeCutOut(0, channel).value().doubleValue() + ") detected!", ProgressDialog.NOTIFICATION);
+									}
+								}									
+								
+								if(extendedLogging)	progress.notifyMessage("Found potential wavelength for channel " + channel 
+										+ " (wavelength " + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() 
+										+ ", power" + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue() + ")", ProgressDialog.LOG);
+								
+								//check if a waveLength has been already picked > if no, assign that wavelength, if yes assign only if the wavelength is higher 
+								//(highest wavelength is most likely the one relevant for the fluorophore)
+								if(waveLength==-1.0) {
+									waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
+									laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
+									if(extendedLogging)	progress.notifyMessage("Set wavelength for channel " + channel
+											+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+								}else if(!channelFilterModel.equals(CHANNEL_PMT_TRANS_SP8) // Called PMT Trans in Sp8 Microscope
+									&& !channelFilterModel.equals(CHANNEL_PMT_TRANS_STELLARIS) //Called Trans PMT in Stellaris Microscope
+										&& waveLength < Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue())){
+									waveLength = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue());
+									laserPower = Double.parseDouble(Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue());
+									if(extendedLogging)	progress.notifyMessage("Replace wavelength for channel " + channel 
+											+ " (new wavelength " + waveLength + ", power" + laserPower + ")", ProgressDialog.LOG);
+								}else {
+									if(extendedLogging)	progress.notifyMessage("Do not replace wavelength for channel " + channel 
+											+ " with wavelength " + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("LaserLine").getNodeValue() 
+											+ " (power" + Aotfs.item(aotf).getChildNodes().item(las).getAttributes().getNamedItem("IntensityDev").getNodeValue() + ")", ProgressDialog.LOG);
+								}									
+							}																
+						}
+						
+						if(waveLength==-1.0) {
+							progress.notifyMessage("Could not find / set a wavelength for channel " + channel + "!", ProgressDialog.NOTIFICATION);
+						}else {
+							if(extendedLogging)	progress.notifyMessage("Write wavelength and laser power for channel " + channel + " (new wavelength " + waveLength + ", power " + laserPower + ")", ProgressDialog.LOG);
+							meta.setChannelExcitationWavelength(FormatTools.getWavelength(waveLength), 0, channel);								
+							for(int las = 0; las < meta.getLightSourceCount(0); las++) {
+								if(meta.getLaserWavelength(0, las).value().doubleValue() == waveLength) {										
+									meta.setChannelLightSourceSettingsID(meta.getLaserID(0, las), 0, channel);
+									meta.setChannelLightSourceSettingsAttenuation(new PercentFraction((float)(laserPower/100.0)), 0, channel);
+									break;										
+								}									
+							}								
+						}							
+						channel++;
+					}						
+					detectNr++;
+				}					
+				ldm++;
+			}				
+		}
+		
+		/**
+		 * Add Z positions
+		 * */
+		double baseZPosition = 0.0;
+		//Extract base Z positions
+		{
+			NodeList zNodes = getFirstNodeWithName(LDMMasterConfocalSetDef.getChildNodes(), "AdditionalZPositionList").getChildNodes();
+			for(int zN = 0; zN < zNodes.getLength(); zN++) {
+				if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-galvo")) {
+					if(extendedLogging)	progress.notifyMessage("Fetching galvo z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
+							+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
+					baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+					//This position is added in files from version v0.2.1 on, since it turned out that this actually matters
+				}else if(zNodes.item(zN).getAttributes().getNamedItem("ZUseModeName").getNodeValue().equals("z-wide")) {
+					if(extendedLogging)	progress.notifyMessage("Fetching widefield z position ... " + zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()
+							+ " (Parsed to double: " + Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue()) + ")", ProgressDialog.LOG);
+					baseZPosition += Double.parseDouble(zNodes.item(zN).getAttributes().getNamedItem("ZPosition").getNodeValue());
+				}else {
+					progress.notifyMessage("WARNING: There is an unknown z position node in AdditionalZPositionList of the Master ATLConfocalSettingDefinition ... (NodeName: " 
+							+ zNodes.item(zN).getNodeName() + ")", ProgressDialog.NOTIFICATION);
+				}
+			}
+		}
+		if(extendedLogging)	progress.notifyMessage("Basal z position determined to be ... " + baseZPosition, ProgressDialog.LOG);
+		
+		//Extract begin and end of stack Z positions to find z position in stack
+		double zSteps;
+		try {
+			double beginZ, endZ;
+			if(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin") == null) {
+				// Single plane image, we can set it to an arbitrary value
+				beginZ = 0;
+				endZ = 0.7;
+				zSteps = 0.7;
+				progress.notifyMessage("No stack image > Creating begin / end stack positions as " + beginZ + " and " + endZ, ProgressDialog.LOG);
+				
+			}else {			
+				// Z stacks: begin / end information is there and can be used later to determine z step size.
+				beginZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue());
+				endZ = Double.parseDouble(LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue());
+				
+				if(extendedLogging) {
+					progress.notifyMessage("Fetching stack begin Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("Begin").getNodeValue()
+						+ " (Parsed to double: " + beginZ + ")", ProgressDialog.LOG);
+					progress.notifyMessage("Fetching stack end Z position ... to be " + LDMMasterConfocalSetDef.getAttributes().getNamedItem("End").getNodeValue()
+						+ " (Parsed to double: " + endZ + ")", ProgressDialog.LOG);
+				}
+
+				zSteps = (endZ - beginZ) / (double)(meta.getPixelsSizeZ(0).getValue()-1.0); //Calculating the Z step size from begin / end of stack
+				
+				if(extendedLogging) {
+					progress.notifyMessage("Determining z steps to be " + zSteps
+						+ " m (Pixel Z size in pixels object: " + meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0 + " m, matching? " 
+						+ (zSteps == meta.getPixelsPhysicalSizeZ(0).value().doubleValue()/1000000.0)+ ")", ProgressDialog.LOG);
+				}
+			}				
+		}catch(Exception e) {
+			String out = "";
+			for (int err = 0; err < e.getStackTrace().length; err++) {
+				out += " \n " + e.getStackTrace()[err].toString();
+			}
+			progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": "
+					+ "Failed to detect begin / end of stack = number of z-steps!"
+					+ "\nError message: " + e.getMessage()
+					+ "\nError localized message: " + e.getLocalizedMessage()
+					+ "\nError cause: " + e.getCause() 
+					+ "\nDetailed message:"
+					+ "\n" + out,
+				ProgressDialog.ERROR);
+			return;
+		}
+
+		int theZ;
+		double newZ = -1.0;
+		double xPos, yPos;
+		for(int p = 0; p < meta.getPlaneCount(0); p++) {
+			/**
+			 * Calculate and write z position for each plane
+			 * */
+			NonNegativeInteger theZObj = meta.getPlaneTheZ(0, p);
+			if (theZObj == null) {
+				/**
+				 * Calculate the z position through retrieving information from:
+				  	<AdditionalZPositionList>
+						<AdditionalZPosition Valid="1" SuperZMode="1" SuperZModeName="RestrictedRange" ZMode="1" ZUseModeName="z-galvo" ZPosition="-2.3841880645312E-10"/>
+						<AdditionalZPosition Valid="1" SuperZMode="1" SuperZModeName="RestrictedRange" ZMode="2" ZUseModeName="z-wide" ZPosition="0.002765538685"/>
+					</AdditionalZPositionList>
+					nested under the LDMMasterConfocalSetDef node. This is done above and returned as baseZPosition.
+					There seems to be no different z plane thus we just consider theZ to be 0.
+				 */
+				theZ = 0;
+				newZ = baseZPosition;
+			} else {
+			    theZ = theZObj.getValue();
+				newZ = baseZPosition + zSteps * (double) theZ;
 			}
 			
+			meta.setPlanePositionZ(FormatTools.createLength(newZ,UNITS.METER), 0, p);
+			
+			if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") received z position " 
+					+ meta.getPlanePositionZ(0, p).value().doubleValue() + " " + meta.getPlanePositionZ(0, p).unit().getSymbol()
+					+ " (basal Z position " + baseZPosition + ", Z pixel Size " + meta.getPixelsSizeZ(0).getValue() + ")", ProgressDialog.LOG);
+			
 			/**
-			 * Saving modified tiff comment into copied image
+			 * Correct unit in X and Y positions
 			 * */
-		    TiffSaver saver = new TiffSaver(savePath);
-		    RandomAccessInputStream in = new RandomAccessInputStream(savePath);
-		    saver.overwriteComment(in, comment);
-		    in.close();
-			progress.updateBarText("Saving " + savePath + " done!");
-			if(extendedLogging)	progress.notifyMessage("Saved " + savePath, ProgressDialog.LOG);
+			xPos = meta.getPlanePositionX(0, p).value().doubleValue();
+			if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change x position from " 
+					+ meta.getPlanePositionX(0, p).value().doubleValue() + " " + meta.getPlanePositionX(0, p).unit().getSymbol()
+					+ " to " + FormatTools.createLength(xPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(xPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
+			meta.setPlanePositionX(FormatTools.createLength(xPos,UNITS.METER), 0, p);
+
+			yPos = meta.getPlanePositionY(0, p).value().doubleValue();
+			if(extendedLogging)	progress.notifyMessage("Plane " + p + "(TheZ " + theZ + ") Change y position from " 
+					+ meta.getPlanePositionY(0, p).value().doubleValue() + " " + meta.getPlanePositionY(0, p).unit().getSymbol()
+					+ " to " + FormatTools.createLength(yPos,UNITS.METER).value().doubleValue() + " " + FormatTools.createLength(yPos,UNITS.METER).unit().getSymbol() + ".", ProgressDialog.LOG);
+			meta.setPlanePositionY(FormatTools.createLength(yPos,UNITS.METER), 0, p);				
+		}
+		
+		/**
+		 * Add as a manual annotation the X,Y,Z positions of the current image / plane
+		 * */
+		int imageZ = -1, imageC = -1, imageT = -1;
+		for(int tiffD = 0; tiffD < meta.getTiffDataCount(0); tiffD++) {
+			if(meta.getUUIDValue(0, tiffD).equals(meta.getUUID())) {
+				imageC = meta.getTiffDataFirstC(0, tiffD).getValue();
+				imageZ = meta.getTiffDataFirstZ(0, tiffD).getValue();
+				imageT = meta.getTiffDataFirstT(0, tiffD).getValue();
+									
+				meta.setImageDescription("Filename: '" + meta.getUUIDFileName(0, tiffD) + "'", 0);
+				
+				if(extendedLogging)	progress.notifyMessage("Found UUID " + meta.getUUID() + ": C" 
+						 + imageC + " Z" + imageZ + " T" + imageT + " File name " + meta.getUUIDFileName(0, tiffD), ProgressDialog.LOG);
+				break;
+			}
+		}
+		if(imageZ == -1) {
+			progress.notifyMessage("Task " + (task + 1) + "/" + tasks + ": ERROR! The metadata does not contain any plane information for the UUID!",
+					ProgressDialog.NOTIFICATION);
+		}
+		for(int p = 0; p < meta.getPlaneCount(0); p++) {
+			if(meta.getPlaneTheZ(0, p).getValue()==imageZ
+					&& meta.getPlaneTheC(0, p).getValue()==imageC
+					&& meta.getPlaneTheT(0, p).getValue()==imageT) {
+				meta.setImageDescription("ImageCoordinates: "
+						+ "x=" + meta.getPlanePositionX(0, p).value().doubleValue() + meta.getPlanePositionX(0, p).unit().getSymbol() + ", "
+						+ "y=" + meta.getPlanePositionY(0, p).value().doubleValue() + meta.getPlanePositionY(0, p).unit().getSymbol() + ", "
+						+ "z=" + meta.getPlanePositionZ(0, p).value().doubleValue() + meta.getPlanePositionZ(0, p).unit().getSymbol() + ";\n"
+						+ meta.getImageDescription(0)
+						+ ";\nThis OME Metadatafile was enriched based on the corresponding .ome.xml file with the help of the plugin " + PLUGINNAME + " (Version: " + PLUGINVERSION + ", Github: " + PLUGINGITHUBURL + ")",
+					0);
+			}
+		}
+		
+		/**
+		 * Retrieve new comment
+		 * */
+		comment = service.getOMEXML(meta);
+		
+		if(logWholeComments) {
+			progress.notifyMessage("Comment after adjustments:", ProgressDialog.LOG);
+			progress.notifyMessage(comment, ProgressDialog.LOG);
+			
+		}
+		
+		/**
+		 * Create folder and copy files there
+		 * name = well, e.g. B2 or filename and well, e.g. DIl1295 TileScan1 B2
+		 * positionName = image region in the well, e.g. R1			 * 
+		 * */		
+		// Get acquisition date
+		String dateString = "unknownDate";
+		try {
+			dateString = meta.getImageAcquisitionDate(0).getValue();
+		}catch(Exception e){
+			progress.notifyMessage("Task " + (1+task) + ": Error during fetching acquisition date/time for " + name + " " + positionName + ", Z" + imageZ, ProgressDialog.NOTIFICATION);				
+		}
+		dateString = dateString.replace("-", "");
+		dateString = dateString.replace(":", "");
+		dateString = dateString.replace(".", "_");
+		dateString = dateString.replace("T", "_");
+		
+		// Generate a new unique directory to save the images
+		String saveDir = name + " " + positionName + "_" + dateString + "_Z" + imageZ;
+		File savingDirectory = new File(outPath + FILESEP + saveDir + FILESEP);
+		
+		if(new File(outPath + FILESEP + saveDir + FILESEP).exists()) {				
+			if(extendedLogging)	progress.notifyMessage("Directory to save files already existed: " + savingDirectory.getAbsolutePath(), ProgressDialog.LOG);
+		}else {
+			if(extendedLogging)	progress.notifyMessage("Creating directory to save files: " + savingDirectory.getAbsolutePath(), ProgressDialog.LOG);
+			savingDirectory.mkdir();
+		}
+		
+		// Copy image and metadata (if not already there)
+//			String saveName = file.substring(file.lastIndexOf(FILESEP)+1);
+		String saveName = positionName + "";
+		if(imageZ >= 10) {
+			saveName += "_Z" + imageZ;
+		}else {
+			saveName += "_Z0" + imageZ;
+		}
+		if(imageC >= 10) {
+			saveName += "_C" + imageC;
+		}else {
+			saveName += "_C0" + imageC;
+		}
+		saveName += ".ome.tif";
+		
+		String savePath = outPath + FILESEP + saveDir + FILESEP + saveName; 
+		
+		FileUtils.copyFile(new File(file), new File(savePath));
+		
+		/**
+		 * From version v0.1.0 on the path for the metadata xml was switched from 
+		 * ```new File(outPath + FILESEP + saveDir + FILESEP + "MetaData.ome.xml")```
+		 * to the following one to make sure LIMS reads it and to fix github issue #1:
+		 */
+		File newMetadataFile = new File(outPath + FILESEP + saveDir + FILESEP 
+									+ "metadata" + FILESEP + "image.ome.xml");
+		
+		if(newMetadataFile.exists()) {
+			if(extendedLogging)	progress.notifyMessage("Metadata existed already (" + newMetadataFile.getAbsolutePath() + ")", ProgressDialog.LOG);
+		}else {
+			FileUtils.copyFile(metaDataFile, newMetadataFile);
+			if(extendedLogging)	progress.notifyMessage("Saved " + newMetadataFile.getAbsolutePath(), ProgressDialog.LOG);
+		}
+		
+		/**
+		 * Saving modified tiff comment into copied image
+		 * */
+	    TiffSaver saver = new TiffSaver(savePath);
+	    RandomAccessInputStream in = new RandomAccessInputStream(savePath);
+	    saver.overwriteComment(in, comment);
+	    in.close();
+		progress.updateBarText("Saving " + savePath + " done!");
+		if(extendedLogging)	progress.notifyMessage("Saved " + savePath, ProgressDialog.LOG);
 	}
 	
 	private String getNumberedNodeName(Node tempNode) {
