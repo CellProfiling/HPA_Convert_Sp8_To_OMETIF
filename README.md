@@ -1,6 +1,11 @@
 # HPA: Convert Sp8-Tif to OME-Tif
-FIJI plugin that allows to convert the ome.tif files exported from the 3D viewer in Leica's LASX (Confocal Microscope DMi8-Sp8 or Stellaris 8) to OME-Tif files suitable for the HPA LIMS.
-See release notes for more information.
+[![Latest Release](https://img.shields.io/github/v/release/CellProfiling/HPA_Convert_Sp8_To_OMETIF)](https://github.com/CellProfiling/HPA_Convert_Sp8_To_OMETIF/releases/latest)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17127984.svg)](https://doi.org/10.5281/zenodo.17127984)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+FIJI plugin that allows to convert the ome.tif files exported from the 3D viewer in Leica's LASX (Confocal Microscope DMi8-Sp8 or Stellaris 8) to metadata-rich .ome.tif files suitable for upload to the Human Protein Atlas' LIMS.
+
+From v0.2.1 releases are automatically archived on zenodo, where you can find release specific DOIs: https://doi.org/10.5281/zenodo.17127984.
 
 ## Copyright
 (c) 2022-2026, Jan N. Hansen
