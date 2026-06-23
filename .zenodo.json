@@ -1,0 +1,22 @@
+{
+  "title": "HPA Convert Sp8-Tif to OME-Tif",
+  "description": "FIJI plugin that allows to convert the ome.tif files exported from the 3D viewer in Leica's LASX (Confocal Microscope Sp8 or Stellaris 8) to metadata-rich .ome.tif files suitable for upload to the Human Protein Atlas' LIMS.",
+  "creators": [
+    {
+      "name": "Hansen, Jan N.",
+      "orcid": "0000-0002-0489-7535"
+    }
+  ],
+  "keywords": [
+    "ImageJ",
+    "FIJI",
+    "microscopy",
+    "OME-TIFF",
+    "Leica",
+    "confocal microscopy",
+    "metadata"
+  ],
+  "license": "GPL-3.0",
+  "upload_type": "software",
+  "language": "eng"
+}
